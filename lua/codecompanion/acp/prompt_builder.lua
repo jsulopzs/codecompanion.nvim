@@ -54,6 +54,10 @@ function PromptBuilder:on_permission_request(fn)
   self.handlers.permission_request = fn
   return self
 end
+function PromptBuilder:on_elicitation_request(fn)
+  self.handlers.elicitation_request = fn
+  return self
+end
 function PromptBuilder:on_write_text_file(fn)
   self.handlers.write_text_file = fn
   return self
@@ -233,6 +237,28 @@ function PromptBuilder:handle_permission_request(id, params)
 
   if self.handlers.permission_request then
     self.handlers.permission_request(request)
+  else
+    request.respond(nil, true)
+  end
+end
+
+---Handle a form elicitation request from the agent
+---@param id number
+---@param params table
+---@return nil
+function PromptBuilder:handle_elicitation_request(id, params)
+  local request = {
+    id = id,
+    session_id = params.sessionId,
+    message = params.message,
+    requested_schema = params.requestedSchema,
+    respond = function(response, cancelled)
+      self.connection:send_result(id, cancelled and { action = "cancel" } or response)
+    end,
+  }
+
+  if self.handlers.elicitation_request then
+    self.handlers.elicitation_request(request)
   else
     request.respond(nil, true)
   end

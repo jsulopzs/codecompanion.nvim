@@ -86,6 +86,17 @@ T["ACP Connection"]["can create connection with adapter"] = function()
   h.eq(result.authenticated, false)
 end
 
+T["ACP Connection"]["advertises form elicitation as a JSON object"] = function()
+  local capabilities = child.lua([[
+    local adapter = vim.tbl_extend("force", test_adapter, { commands = { default = { "node", "test-acp-cli" } } })
+    local connection = ACP.new({ adapter = adapter })
+    return vim.json.encode(connection:prepare_adapter().parameters.clientCapabilities)
+  ]])
+
+  h.expect_contains('"elicitation":{"form":{}}', capabilities)
+  h.expect_contains('"fs":{', capabilities)
+end
+
 T["ACP Connection"]["can handle real initialize response"] = function()
   child.lua([[
     connection = create_init_connection()

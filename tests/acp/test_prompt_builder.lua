@@ -310,6 +310,94 @@ T["Prompt Builder"]["Auto-cancels when no handler is registered"] = function()
   h.eq(false, result.has_optionId)
 end
 
+T["Prompt Builder"]["Sends the answers to an elicitation"] = function()
+  local result = child.lua([[
+    local Connection = require("codecompanion.acp")
+
+    local adapter = {
+      handlers = { form_messages = function(_, msgs) return msgs end },
+      defaults = {},
+      commands = { default = "noop" },
+    }
+
+    local connection = Connection.new({ adapter = adapter })
+    connection.session_id = "test-session-4"
+    connection._agent_info = agent_info
+
+    _G.captured = nil
+    connection.write_message = function(self, data)
+      _G.captured = data
+      return true
+    end
+
+    local pb = connection:session_prompt({ { type = "text", text = "hello" } })
+
+    local received
+    pb:on_elicitation_request(function(req)
+      received = req
+      req.respond({ action = "accept", content = { question_0 = "Redis" } })
+    end)
+
+    pb:handle_elicitation_request(21, {
+      sessionId = "sess-4",
+      mode = "form",
+      message = "Which cache?",
+      requestedSchema = { type = "object", properties = { question_0 = { type = "string", enum = { "Redis" } } } },
+    })
+
+    local sent = vim.json.decode(_G.captured or "{}")
+    return {
+      id = sent.id,
+      action = sent.result.action,
+      answer = sent.result.content.question_0,
+      message = received.message,
+      has_schema = received.requested_schema.properties.question_0 ~= nil,
+    }
+  ]])
+
+  h.eq(21, result.id)
+  h.eq("accept", result.action)
+  h.eq("Redis", result.answer)
+  h.eq("Which cache?", result.message)
+  h.is_true(result.has_schema)
+end
+
+T["Prompt Builder"]["Cancels an elicitation when no handler is registered"] = function()
+  local result = child.lua([[
+    local Connection = require("codecompanion.acp")
+
+    local adapter = {
+      handlers = { form_messages = function(_, msgs) return msgs end },
+      defaults = {},
+      commands = { default = "noop" },
+    }
+
+    local connection = Connection.new({ adapter = adapter })
+    connection.session_id = "test-session-5"
+    connection._agent_info = agent_info
+
+    _G.captured = nil
+    connection.write_message = function(self, data)
+      _G.captured = data
+      return true
+    end
+
+    local pb = connection:session_prompt({ { type = "text", text = "hello" } })
+    pb:handle_elicitation_request(22, {
+      sessionId = "sess-5",
+      mode = "form",
+      message = "Which cache?",
+      requestedSchema = { type = "object", properties = {} },
+    })
+
+    local sent = vim.json.decode(_G.captured or "{}")
+    return { id = sent.id, action = sent.result.action }
+  ]])
+
+  h.eq(22, result.id)
+  h.eq("cancel", result.action)
+end
+
 T["Prompt Builder"]["handle_error calls error handler and fires event"] = function()
   local result = child.lua([[
     local error_handler_called = false

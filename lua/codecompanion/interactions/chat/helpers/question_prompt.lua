@@ -113,7 +113,7 @@ local function add_summary(chat, opts)
 end
 
 ---Bind keymaps for a multi-select question, advancing through each option in turn
----@param prompt { chat: CodeCompanion.Chat, options: table[], include_line: number|nil, bind: fun(lhs: string, callback: function, desc: string), finish: fun(answer: string|nil), skip: function }
+---@param prompt { chat: CodeCompanion.Chat, options: table[], include_line: number|nil, bind: fun(lhs: string, callback: function, desc: string), finish: fun(answer: string|nil, selection?: { selected: string[] }), skip: function }
 local function bind_multi_select(prompt)
   local selected = {}
   local option_index = 1
@@ -129,7 +129,7 @@ local function bind_multi_select(prompt)
     option_index = option_index + 1
     if option_index > #prompt.options then
       clear_include_line()
-      return prompt.finish(#selected > 0 and table.concat(selected, ", ") or nil)
+      return prompt.finish(#selected > 0 and table.concat(selected, ", ") or nil, { selected = selected })
     end
     if prompt.include_line then
       prompt.chat:update_buf_line({
@@ -163,7 +163,7 @@ end
 
 ---Present a question in the chat buffer and resolve the answer through keymaps
 ---@param chat CodeCompanion.Chat
----@param opts { question: table, index: number, total: number, callback: fun(answer: string|nil) }
+---@param opts { question: table, index: number, total: number, callback: fun(answer: string|nil, selection?: { selected: string[] }) }
 ---@return nil
 function M.ask(chat, opts)
   local bufnr = chat.bufnr
@@ -201,7 +201,8 @@ function M.ask(chat, opts)
   end
 
   ---@param answer string|nil
-  local function finish(answer)
+  ---@param selection? { selected: string[] }
+  local function finish(answer, selection)
     if resolved then
       return
     end
@@ -215,7 +216,7 @@ function M.ask(chat, opts)
       id = id,
       skipped = answer == nil,
     })
-    opts.callback(answer)
+    opts.callback(answer, selection)
   end
 
   local function custom_answer()
