@@ -259,6 +259,9 @@ function ACPHandler:create_and_send_prompt(payload)
     :on_permission_request(function(request)
       self:handle_permission_request(request)
     end)
+    :on_elicitation_request(function(request)
+      self:handle_permission_request(request)
+    end)
     :on_complete(function()
       self:handle_complete()
     end)
@@ -460,6 +463,10 @@ function ACPHandler:_process_next_permission()
     self:_process_next_permission()
   end
 
+  -- Questions share the permission queue so only one prompt waits on the user at a time
+  if request.requested_schema then
+    return require("codecompanion.interactions.chat.acp.elicitation").ask(self.chat, request)
+  end
   return require("codecompanion.interactions.chat.acp.request_permission").confirm(self.chat, request)
 end
 

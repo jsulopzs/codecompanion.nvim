@@ -768,6 +768,11 @@ function Connection:prepare_adapter()
   adapter.defaults.mcpServers = adapter_utils.set_env_vars(adapter, adapter.defaults.mcpServers)
   adapter.command = adapter_utils.set_env_vars(adapter, adapter.commands.selected or adapter.commands.default)
 
+  -- Form elicitation is rendered by the chat buffer, so every agent can ask the user questions
+  local capabilities = adapter.parameters.clientCapabilities or {}
+  capabilities.elicitation = capabilities.elicitation or { form = vim.empty_dict() }
+  adapter.parameters.clientCapabilities = capabilities
+
   return adapter
 end
 
@@ -896,6 +901,11 @@ local DISPATCH = {
   [METHODS.SESSION_REQUEST_PERMISSION] = function(self, m)
     if self._active_prompt then
       self._active_prompt:handle_permission_request(m.id, m.params)
+    end
+  end,
+  [METHODS.ELICITATION_CREATE] = function(self, m)
+    if self._active_prompt then
+      self._active_prompt:handle_elicitation_request(m.id, m.params)
     end
   end,
   [METHODS.FS_READ_TEXT_FILE] = function(self, m)

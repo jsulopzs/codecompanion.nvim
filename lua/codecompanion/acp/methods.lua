@@ -1,6 +1,7 @@
 return {
   INITIALIZE = "initialize",
   AUTHENTICATE = "authenticate",
+  ELICITATION_CREATE = "elicitation/create",
   SESSION_CANCEL = "session/cancel",
   SESSION_FORK = "session/fork",
   SESSION_LIST = "session/list",

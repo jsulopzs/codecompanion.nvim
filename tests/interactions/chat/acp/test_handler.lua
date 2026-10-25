@@ -28,6 +28,7 @@ T = new_set({
         -- Reset modules that tests may have overridden
         package.loaded["codecompanion.acp"] = nil
         package.loaded["codecompanion.interactions.chat.acp.request_permission"] = nil
+        package.loaded["codecompanion.interactions.chat.acp.elicitation"] = nil
         package.loaded["codecompanion.interactions.chat.acp.handler"] = nil
         package.loaded["codecompanion.interactions.chat.acp.commands"] = nil
         package.loaded["codecompanion.interactions.chat"] = nil
@@ -984,6 +985,59 @@ T["ACPHandler"]["Permission Queue"]["presents next request after user responds"]
   h.eq("allow", result.responses[1].option_id)
   h.is_true(result.queue_empty)
   h.is_true(result.active)
+end
+
+T["ACPHandler"]["Permission Queue"]["asks a question only after the pending permission is answered"] = function()
+  local result = child.lua([[
+    local chat = h.setup_chat_buffer({}, {
+      name = "test_acp",
+      config = {
+        name = "test_acp",
+        type = "acp",
+        handlers = { form_messages = function(a, m) return m end }
+      }
+    })
+
+    local ACPHandler = require("codecompanion.interactions.chat.acp.handler")
+    local handler = ACPHandler.new(chat)
+
+    local confirmed = {}
+    package.loaded["codecompanion.interactions.chat.acp.request_permission"] = {
+      confirm = function(chat_arg, request)
+        table.insert(confirmed, request)
+      end
+    }
+    local asked = {}
+    package.loaded["codecompanion.interactions.chat.acp.elicitation"] = {
+      ask = function(chat_arg, request)
+        table.insert(asked, request)
+      end
+    }
+
+    handler:handle_permission_request({
+      tool_call = { toolCallId = "tool_1" },
+      options = { { kind = "allow_once", optionId = "allow", name = "Allow" } },
+      respond = function() end,
+    })
+    handler:handle_permission_request({
+      message = "Which cache?",
+      requested_schema = { type = "object", properties = {} },
+      respond = function() end,
+    })
+
+    local asked_before_answer = #asked
+    confirmed[1].respond("allow", false)
+
+    return {
+      asked_before_answer = asked_before_answer,
+      asked_after_answer = #asked,
+      message = asked[1] and asked[1].message,
+    }
+  ]])
+
+  h.eq(0, result.asked_before_answer)
+  h.eq(1, result.asked_after_answer)
+  h.eq("Which cache?", result.message)
 end
 
 T["ACPHandler"]["Permission Queue"]["clears queue on completion"] = function()
