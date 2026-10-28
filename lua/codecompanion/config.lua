@@ -543,6 +543,19 @@ If you are providing code changes, use the edit_file tool (if available to you) 
             max_sessions = 500,
           },
         },
+        ["rewind"] = {
+          path = "interactions.chat.slash_commands.builtin.rewind",
+          description = "Rewind to an earlier message",
+          ---@param opts { adapter: CodeCompanion.HTTPAdapter|CodeCompanion.ACPAdapter }
+          ---@return boolean
+          enabled = function(opts)
+            -- The agent keeps the history, so only it can cut it
+            return opts.adapter ~= nil and opts.adapter.type == "acp"
+          end,
+          opts = {
+            contains_code = false,
+          },
+        },
         ["rules"] = {
           path = "interactions.shared.slash_commands.rules",
           description = "Insert rules",
@@ -793,6 +806,12 @@ If you are providing code changes, use the edit_file tool (if available to you) 
           index = 23,
           callback = "keymaps.tool_call_details",
           description = "Show the tool call under the cursor",
+        },
+        rewind = {
+          modes = { n = "gu" },
+          index = 24,
+          callback = "keymaps.rewind",
+          description = "Rewind to an earlier message",
         },
         -- Note: This is only available during streaming
         _btw = {

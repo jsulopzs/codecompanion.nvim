@@ -374,6 +374,54 @@ T["ACP Connection"]["load_session with fork loads the new fork and announces it"
   h.eq("forked-session", result.announced)
 end
 
+T["ACP Connection"]["records turns from live prompts and replayed history"] = function()
+  local result = child.lua([[
+    local connection = create_test_connection()
+    local function update(u)
+      connection:handle_incoming_request_or_notification({ jsonrpc = "2.0", method = "session/update", params = { sessionId = "s1", update = u } })
+    end
+
+    -- A replayed turn arrives in chunks, with a reply split across two agent messages (a tool call between them)
+    update({ sessionUpdate = "user_message_chunk", content = { type = "text", text = "Hel" } })
+    update({ sessionUpdate = "user_message_chunk", content = { type = "text", text = "lo" } })
+    update({ sessionUpdate = "agent_message_chunk", messageId = "m1", content = { type = "text", text = "Looking" } })
+    update({ sessionUpdate = "tool_call", toolCallId = "t1", title = "ls" })
+    update({ sessionUpdate = "agent_message_chunk", messageId = "m2", content = { type = "text", text = "Done" } })
+
+    -- A live prompt starts its turn when sent, as agents don't echo it
+    connection:start_turn("s1", { { type = "resource", resource = { text = "file" } }, { type = "text", text = "Next" } })
+    update({ sessionUpdate = "agent_message_chunk", messageId = "m3", content = { type = "text", text = "Ok" } })
+
+    return vim.tbl_map(function(t) return { prompt = t.prompt, agent_message_id = t.agent_message_id } end, connection:turns("s1"))
+  ]])
+
+  h.eq({
+    { prompt = "Hello", agent_message_id = "m2" },
+    { prompt = "Next", agent_message_id = "m3" },
+  }, result)
+end
+
+T["ACP Connection"]["fork_session cuts at an agent message"] = function()
+  local result = child.lua([[
+    local params
+    local connection = create_init_connection()
+    function connection:send_rpc_request(method, p)
+      if method == "initialize" then
+        return { protocolVersion = 1, authMethods = {}, agentCapabilities = { sessionCapabilities = { fork = {} } } }
+      elseif method == "session/fork" then
+        params = p
+        return { sessionId = "forked-session" }
+      end
+    end
+
+    connection:connect_and_authenticate()
+    connection:fork_session("source-session", { at = "m2" })
+    return params._meta
+  ]])
+
+  h.eq({ jetbrains = { air = { version = 1, fork = { version = 1, messageId = "m2" } } } }, result)
+end
+
 T["ACP Connection"]["falls back to session/new if session/load fails"] = function()
   local result = child.lua([[
     local calls = {}

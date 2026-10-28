@@ -5,7 +5,7 @@ local M = {}
 ---Load an agent session into the chat and render its history in the buffer
 ---@param chat CodeCompanion.Chat
 ---@param session_id string
----@param opts? { fork?: boolean, title?: string } fork restores a new fork of the session instead
+---@param opts? { fork?: boolean, at?: string, title?: string } fork restores a new fork of the session instead, cut after the agent message `at` when given
 ---@return boolean success
 function M.session(chat, session_id, opts)
   opts = opts or {}
@@ -14,6 +14,7 @@ function M.session(chat, session_id, opts)
   local updates = {}
   local ok = chat.acp_connection:load_session(session_id, {
     fork = opts.fork,
+    at = opts.at,
     on_session_update = function(update)
       table.insert(updates, update)
     end,

@@ -110,6 +110,8 @@ function PromptBuilder:send()
     end
   end
 
+  self.connection:start_turn(self.connection.session_id, self.messages)
+
   -- Send the prompt
   local jsonrpc = require("codecompanion.utils.jsonrpc")
   local id = self.connection._state.id_gen:next()

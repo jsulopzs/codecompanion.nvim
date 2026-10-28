@@ -29,6 +29,7 @@ Slash commands add context to the chat buffer and act on the chat itself. Type `
 | [/now](#now) | Insert the current date and time |
 | [/rename](#rename) | Rename the chat |
 | [/resume](#resume) | Restore a previous session |
+| [/rewind](#rewind) | Rewind to an earlier message |
 | [/rules](#rules) | Add a rules group |
 | [/save](#save) | Save the chat as a session |
 | [/share](#share) | Share the chat as a GitHub Gist |
@@ -236,6 +237,15 @@ The _resume_ slash command lists your past sessions and restores the selected on
 ## /rules
 
 The _rules_ slash command adds a [rules](/usage/chat-buffer/rules) group to the chat buffer. It's also available in the [CLI prompt input](/usage/cli#slash-commands).
+
+## /rewind
+
+The _rewind_ slash command (or `gu` in the chat buffer) lists the messages you've sent, newest first. Pick one and the chat goes back to just before it: the conversation continues in a fork of the session cut after the reply that preceded it, and the message is put back in the chat buffer for you to edit and send again. The original session stays as it was. Rewinding to your first message starts a new session.
+
+It works with ACP agents that support `session/load` and `session/fork` and can fork at a message, such as Claude Code and Codex. If an agent forks without cutting, the chat stays on the original session and warns you.
+
+> [!NOTE]
+> Rewinding changes the conversation, not your files. Undo any edits the agent made with your version control.
 
 ## /save
 

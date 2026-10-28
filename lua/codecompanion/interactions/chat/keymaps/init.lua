@@ -293,6 +293,13 @@ M.send = {
   end,
 }
 
+M.rewind = {
+  desc = "Rewind to an earlier message",
+  callback = function(chat)
+    require("codecompanion.interactions.chat.acp.rewind").pick(chat)
+  end,
+}
+
 M.regenerate = {
   callback = function(chat)
     chat:regenerate()

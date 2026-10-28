@@ -56,6 +56,7 @@ local uv = vim.uv
 ---@field _on_session_update function|nil
 ---@field _config_options table[] Raw configOptions from the agent
 ---@field _session_config_options table<string, table[]> The configOptions of each session, restored when switching back to it
+---@field _turns table<string, CodeCompanion.ACP.Turn[]> The turns of each session, in order, for rewinding to an earlier one
 ---@field _in_flight table<string, CodeCompanion.ACP.Connection.InFlight> Establishment steps currently underway
 ---@field _pending_callbacks table<number, function> Async callbacks keyed by request ID
 ---@field _rpc_log? { path: string, write: fun(data: string) } Per-connection log capturing raw JSON-RPC traffic
@@ -63,6 +64,11 @@ local uv = vim.uv
 local Connection = {}
 
 Connection.METHODS = METHODS
+
+---@class CodeCompanion.ACP.Turn
+---@field prompt string The user's prompt
+---@field agent_message_id? string The last agent message of the reply: forking at it keeps this turn and drops every later one
+---@field _collecting? boolean The prompt is still arriving in chunks of a replayed history
 
 ---@class CodeCompanion.ACP.Connection.PendingResponse
 ---@field result any
@@ -108,6 +114,7 @@ function Connection.new(args)
     _initialized = false,
     _pending_callbacks = {},
     _session_config_options = {},
+    _turns = {},
     _state = { handle = nil, id_gen = jsonrpc.IdGenerator.new(), line_buffer = jsonrpc.LineBuffer.new() },
   }, { __index = Connection }) ---@cast self CodeCompanion.ACP.Connection
 
@@ -318,6 +325,64 @@ function Connection:ensure_session()
   return self:_open_session()
 end
 
+---The turns of a session, oldest first
+---@param session_id string
+---@return CodeCompanion.ACP.Turn[]
+function Connection:turns(session_id)
+  return self._turns[session_id] or {}
+end
+
+---Start a turn with the prompt the client sends
+---Agents don't echo a live prompt back as user_message_chunk, so the turn starts here
+---@param session_id string
+---@param prompt table[] ACP content blocks
+---@return nil
+function Connection:start_turn(session_id, prompt)
+  local text = vim
+    .iter(prompt or {})
+    :map(function(block)
+      return block.type == "text" and block.text or nil
+    end)
+    :join("\n")
+  self._turns[session_id] = self._turns[session_id] or {}
+  table.insert(self._turns[session_id], { prompt = text })
+end
+
+---Follow a session's turns through its updates: a replayed prompt starts a turn, and each agent message
+---moves the turn's cut point to it
+---@param session_id string
+---@param update? table
+---@return nil
+function Connection:_record_turn_update(session_id, update)
+  if not session_id or type(update) ~= "table" then
+    return
+  end
+  local turns = self._turns[session_id]
+  if not turns then
+    turns = {}
+    self._turns[session_id] = turns
+  end
+  local last = turns[#turns]
+
+  if update.sessionUpdate == "user_message_chunk" then
+    -- Only the typed text, as for a live prompt: an attached file would otherwise become the turn's label
+    local text = type(update.content) == "table" and update.content.type == "text" and update.content.text or ""
+    if last and last._collecting then
+      last.prompt = last.prompt .. text
+    else
+      table.insert(turns, { prompt = text, _collecting = true })
+    end
+    return
+  end
+
+  if last then
+    last._collecting = nil
+    if update.sessionUpdate == "agent_message_chunk" and update.messageId then
+      last.agent_message_id = update.messageId
+    end
+  end
+end
+
 ---Is a session being created or loaded right now?
 ---@return boolean
 function Connection:is_opening_session()
@@ -426,7 +491,7 @@ end
 
 ---Load an existing session by ID
 ---@param session_id string
----@param opts? { fork?: boolean, on_session_update?: fun(update: table) } fork loads a new fork of the session instead
+---@param opts? { fork?: boolean, at?: string, on_session_update?: fun(update: table) } fork loads a new fork of the session instead, cut after the agent message `at` when given
 ---@return boolean success
 function Connection:load_session(session_id, opts)
   opts = opts or {}
@@ -441,13 +506,15 @@ function Connection:load_session(session_id, opts)
     key = "session",
     work = function()
       if opts.fork then
-        session_id = self:fork_session(session_id)
+        session_id = self:fork_session(session_id, { at = opts.at })
         if not session_id then
           return false
         end
       end
 
       self.session_id = session_id
+      -- The agent replays the whole history, which records its turns afresh
+      self._turns[session_id] = {}
       self._loading_session = true
       self._on_session_update = opts.on_session_update
 
@@ -470,10 +537,22 @@ function Connection:load_session(session_id, opts)
   })
 end
 
+---The `_meta` that asks for a fork cut at an agent message
+---ACP's session/fork has no field for it yet (its RFD reserves the capability), so this uses the
+---JetBrains AIR extension that claude-agent-acp and codex-acp both read, keyed by ACP's own messageId
+---@param message_id string
+---@return table
+local function fork_point_meta(message_id)
+  return { jetbrains = { air = { version = 1, fork = { version = 1, messageId = message_id } } } }
+end
+
 ---Fork an existing session into a new one that starts from its history
 ---@param session_id string
+---@param opts? { at?: string } at is an agent message to cut the history after, dropping every later turn
 ---@return string|nil session_id The ID of the new session
-function Connection:fork_session(session_id)
+function Connection:fork_session(session_id, opts)
+  opts = opts or {}
+
   if not self:is_ready() then
     log:error("[acp::fork_session] Connection not ready")
     return nil
@@ -484,10 +563,11 @@ function Connection:fork_session(session_id)
     return nil
   end
 
-  local forked = self:send_rpc_request(
-    METHODS.SESSION_FORK,
-    vim.tbl_extend("force", self:_session_args(), { sessionId = session_id })
-  )
+  local params = vim.tbl_extend("force", self:_session_args(), { sessionId = session_id })
+  if opts.at then
+    params._meta = fork_point_meta(opts.at)
+  end
+  local forked = self:send_rpc_request(METHODS.SESSION_FORK, params)
   if not forked or not forked.sessionId then
     log:error("[acp::fork_session] Failed to fork session %s", session_id)
     return nil
@@ -786,6 +866,7 @@ end
 ---@private
 local DISPATCH = {
   [METHODS.SESSION_UPDATE] = function(self, m)
+    self:_record_turn_update(m.params.sessionId, m.params.update)
     if m.params.update and m.params.update.sessionUpdate == "available_commands_update" then
       self:handle_available_commands_update(m.params.sessionId, m.params.update.availableCommands)
     elseif m.params.update and m.params.update.sessionUpdate == "config_option_update" then
