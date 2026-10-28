@@ -142,11 +142,11 @@ function ACPHandler:ensure_session()
     return false
   end
 
-  if conn.session_id then
+  if conn.session_id and not conn:is_opening_session() then
     return true
   end
 
-  if not conn:ensure_session() then
+  if not self:_open_requested_session() and not conn:ensure_session() then
     return false
   end
 
@@ -157,6 +157,30 @@ function ACPHandler:ensure_session()
   self.chat:update_metadata()
 
   require("codecompanion.interactions.chat.acp.defaults").apply(self.chat.adapter, conn)
+
+  return true
+end
+
+---Open the session the chat was created for: an existing one to resume, or a fork of one
+---@return boolean success False when there is none or it could not be opened, so a new session is created instead
+function ACPHandler:_open_requested_session()
+  local chat = self.chat
+  local session_id = chat.acp_fork_session_id or chat.acp_session_id
+  if not session_id then
+    return false
+  end
+  local fork = chat.acp_fork_session_id ~= nil
+
+  -- Consumed before the first request yields, so a concurrent caller waits on the session step instead of opening it again
+  chat.acp_fork_session_id, chat.acp_session_id = nil, nil
+
+  if not require("codecompanion.interactions.chat.acp.restore").session(chat, session_id, { fork = fork }) then
+    utils.notify(
+      fork and "Could not fork the session; starting a new one" or "Could not load the session; starting a new one",
+      vim.log.levels.WARN
+    )
+    return false
+  end
 
   return true
 end

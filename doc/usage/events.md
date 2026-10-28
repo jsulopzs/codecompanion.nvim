@@ -97,7 +97,7 @@ vim.api.nvim_exec_autocmds("User", {
 | --- | --- |
 | `CodeCompanionACPConnected` | After the connection is authenticated and ready |
 | `CodeCompanionACPSessionPre` | After authentication, before a session starts, so you can change the connection, such as adding MCP servers |
-| `CodeCompanionACPSessionPost` | After a session starts |
+| `CodeCompanionACPSessionPost` | After a session starts or is loaded |
 | `CodeCompanionACPChatRestored` | After a session is restored |
 | `CodeCompanionACPCommandsUpdate` | After an agent's commands are loaded, with the `commands` in the payload |
 | `CodeCompanionChatACPConfigChanged` | After an agent's configuration options change, with the `config_options` in the payload |

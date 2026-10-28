@@ -581,6 +581,51 @@ T["ACPHandler"]["handles no registered commands"] = function()
   h.eq("\\cost should not transform", result.content)
 end
 
+T["ACPHandler"]["opens the session the chat was created for"] = function()
+  local result = child.lua([[
+    local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp" } })
+    chat.acp_fork_session_id = "source-session"
+
+    local conn = mocks_acp.new()
+    local loaded
+    conn.load_session = function(self, session_id, opts)
+      loaded = { session_id = session_id, fork = opts.fork }
+      self.session_id = "forked-session"
+      return true
+    end
+    local created = false
+    conn.ensure_session = function() created = true; return true end
+    chat.acp_connection = conn
+
+    local ACPHandler = require("codecompanion.interactions.chat.acp.handler")
+    local ok = ACPHandler.new(chat):ensure_session()
+    return { ok = ok, loaded = loaded, created = created, pending = chat.acp_fork_session_id }
+  ]])
+
+  h.eq(true, result.ok)
+  h.eq({ session_id = "source-session", fork = true }, result.loaded)
+  h.eq(false, result.created)
+  h.eq(nil, result.pending)
+end
+
+T["ACPHandler"]["starts a new session when the requested one cannot be opened"] = function()
+  local result = child.lua([[
+    local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp" } })
+    chat.acp_session_id = "missing-session"
+
+    local conn = mocks_acp.new({ session_id = "new-session" })
+    conn.load_session = function() return false end
+    chat.acp_connection = conn
+
+    local ACPHandler = require("codecompanion.interactions.chat.acp.handler")
+    local ok = ACPHandler.new(chat):ensure_session()
+    return { ok = ok, session_id = conn.session_id }
+  ]])
+
+  h.eq(true, result.ok)
+  h.eq("new-session", result.session_id)
+end
+
 T["ACPHandler"]["handles no connection"] = function()
   local result = child.lua([[
     local chat = h.setup_chat_buffer({}, {

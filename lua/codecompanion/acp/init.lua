@@ -307,7 +307,7 @@ end
 ---Ensure a session exists or create one if needed
 ---@return boolean success
 function Connection:ensure_session()
-  if self.session_id then
+  if self.session_id and not self:is_opening_session() then
     return true
   end
 
@@ -316,6 +316,12 @@ function Connection:ensure_session()
   end
 
   return self:_open_session()
+end
+
+---Is a session being created or loaded right now?
+---@return boolean
+function Connection:is_opening_session()
+  return self._in_flight.session ~= nil
 end
 
 ---Prompt through a different session on this connection, or a new one when `session_id` is nil
@@ -359,6 +365,16 @@ function Connection:can_list_sessions()
       and self._agent_info.agentCapabilities
       and self._agent_info.agentCapabilities.sessionCapabilities
       and self._agent_info.agentCapabilities.sessionCapabilities.list ~= nil
+    or false
+end
+
+---Check if the agent supports session/fork
+---@return boolean
+function Connection:can_fork_session()
+  return self._agent_info
+      and self._agent_info.agentCapabilities
+      and self._agent_info.agentCapabilities.sessionCapabilities
+      and self._agent_info.agentCapabilities.sessionCapabilities.fork ~= nil
     or false
 end
 
@@ -410,7 +426,7 @@ end
 
 ---Load an existing session by ID
 ---@param session_id string
----@param opts? { on_session_update?: fun(update: table) }
+---@param opts? { fork?: boolean, on_session_update?: fun(update: table) } fork loads a new fork of the session instead
 ---@return boolean success
 function Connection:load_session(session_id, opts)
   opts = opts or {}
@@ -420,21 +436,80 @@ function Connection:load_session(session_id, opts)
     return false
   end
 
-  self.session_id = session_id
-  self._loading_session = true
-  self._on_session_update = opts.on_session_update
+  -- Shares the session step with session/new, so a concurrent caller waits for this session instead of creating its own
+  return self:_run_once({
+    key = "session",
+    work = function()
+      if opts.fork then
+        session_id = self:fork_session(session_id)
+        if not session_id then
+          return false
+        end
+      end
 
-  if not self:_establish_session() then
-    self.session_id = nil
-    self._loading_session = nil
-    self._on_session_update = nil
-    return false
+      self.session_id = session_id
+      self._loading_session = true
+      self._on_session_update = opts.on_session_update
+
+      local loaded = self:_establish_session()
+
+      self._loading_session = nil
+      self._on_session_update = nil
+
+      if not loaded then
+        self.session_id = nil
+        return false
+      end
+
+      utils.fire("ACPSessionPost", {
+        session_id = self.session_id,
+      })
+
+      return true
+    end,
+  })
+end
+
+---Fork an existing session into a new one that starts from its history
+---@param session_id string
+---@return string|nil session_id The ID of the new session
+function Connection:fork_session(session_id)
+  if not self:is_ready() then
+    log:error("[acp::fork_session] Connection not ready")
+    return nil
   end
 
-  self._loading_session = nil
-  self._on_session_update = nil
+  if not self:can_fork_session() then
+    log:error("[acp::fork_session] Agent does not support forking sessions")
+    return nil
+  end
 
-  return true
+  local forked = self:send_rpc_request(
+    METHODS.SESSION_FORK,
+    vim.tbl_extend("force", self:_session_args(), { sessionId = session_id })
+  )
+  if not forked or not forked.sessionId then
+    log:error("[acp::fork_session] Failed to fork session %s", session_id)
+    return nil
+  end
+
+  log:debug("[acp] Forked session %s into %s", session_id, forked.sessionId)
+  return forked.sessionId
+end
+
+---The working directory and MCP servers that every session request sends
+---@return table
+function Connection:_session_args()
+  local session_args = {
+    cwd = vim.fn.getcwd(),
+    mcpServers = self.adapter_modified.defaults.mcpServers,
+  }
+
+  if self.adapter_modified.defaults.mcpServers == "inherit_from_config" and config.mcp.opts.acp_enabled then
+    session_args.mcpServers = require("codecompanion.mcp").transform_to_acp()
+  end
+
+  return session_args
 end
 
 ---Create or load a session
@@ -444,14 +519,7 @@ function Connection:_establish_session()
     and self._agent_info.agentCapabilities
     and self._agent_info.agentCapabilities.loadSession
 
-  local session_args = {
-    cwd = vim.fn.getcwd(),
-    mcpServers = self.adapter_modified.defaults.mcpServers,
-  }
-
-  if self.adapter_modified.defaults.mcpServers == "inherit_from_config" and config.mcp.opts.acp_enabled then
-    session_args.mcpServers = require("codecompanion.mcp").transform_to_acp()
-  end
+  local session_args = self:_session_args()
 
   ---@param opts { session_data: table, source: string }
   local function apply_session_metadata(opts)

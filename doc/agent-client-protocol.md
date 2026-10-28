@@ -67,6 +67,14 @@ Agents expose their modes, models and other settings as [session config options]
 
 If an agent supports `session/list` and `session/load`, the [/resume](/usage/chat-buffer/slash-commands#resume) slash command lists its previous sessions and restores the one you pick into the chat buffer.
 
+To open a chat on a session from Lua, pass its ID to `acp_session_id`. If the agent also supports `session/fork`, pass it to `acp_fork_session_id` instead, and the chat continues in a new fork of that session, leaving the original untouched:
+
+```lua
+require("codecompanion.interactions.chat").new({ adapter = "claude_code", acp_fork_session_id = "<session-id>" })
+```
+
+If the session can't be loaded or forked, the chat starts a new one.
+
 ### Cleanup
 
 CodeCompanion disconnects from agents on Neovim's `VimLeavePre` autocmd, so their processes are stopped when Neovim exits.

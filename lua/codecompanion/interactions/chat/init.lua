@@ -46,7 +46,8 @@
 
 ---@class CodeCompanion.ChatArgs Arguments that can be injected into the chat
 ---@field acp_command? string The command to use to connect via ACP
----@field acp_session_id? string The ACP session ID which links to this chat buffer
+---@field acp_fork_session_id? string The ACP session to fork into a new session for this chat buffer
+---@field acp_session_id? string The ACP session to load into this chat buffer instead of creating a new one
 ---@field adapter? CodeCompanion.HTTPAdapter|CodeCompanion.ACPAdapter The adapter used in this chat buffer
 ---@field auto_submit? boolean Automatically submit the chat when the chat buffer is created
 ---@field buffer_context? table Context of the buffer that the chat was initiated from
@@ -597,6 +598,7 @@ function Chat.new(args)
   log:trace("Chat created with ID %d", id)
 
   local self = setmetatable({
+    acp_fork_session_id = args.acp_fork_session_id or nil,
     acp_session_id = args.acp_session_id or nil,
     buffer_context = args.buffer_context,
     callbacks = {},

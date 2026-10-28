@@ -299,6 +299,81 @@ T["ACP Connection"]["use_session restores the model of the session it switches b
   h.eq("opus", result)
 end
 
+T["ACP Connection"]["fork_session sends session/fork and returns the new session"] = function()
+  local result = child.lua([[
+    local requests = {}
+    local connection = create_init_connection()
+    function connection:send_rpc_request(method, params)
+      table.insert(requests, { method = method, params = params })
+      if method == "initialize" then
+        return { protocolVersion = 1, authMethods = {}, agentCapabilities = { sessionCapabilities = { fork = {} } } }
+      elseif method == "session/fork" then
+        return { sessionId = "forked-session" }
+      end
+    end
+
+    connection:connect_and_authenticate()
+    local forked = connection:fork_session("source-session")
+    local fork_request = vim.iter(requests):find(function(r) return r.method == "session/fork" end)
+    return { forked = forked, source = fork_request.params.sessionId, cwd = fork_request.params.cwd ~= nil }
+  ]])
+
+  h.eq("forked-session", result.forked)
+  h.eq("source-session", result.source)
+  h.eq(true, result.cwd)
+end
+
+T["ACP Connection"]["fork_session refuses when the agent cannot fork"] = function()
+  local result = child.lua([[
+    local calls = {}
+    local connection = create_init_connection()
+    function connection:send_rpc_request(method, params)
+      table.insert(calls, method)
+      if method == "initialize" then
+        return { protocolVersion = 1, authMethods = {}, agentCapabilities = {} }
+      end
+    end
+
+    connection:connect_and_authenticate()
+    return { forked = connection:fork_session("source-session"), called = calls }
+  ]])
+
+  h.eq(nil, result.forked)
+  h.eq(false, vim.tbl_contains(result.called, "session/fork"))
+end
+
+T["ACP Connection"]["load_session with fork loads the new fork and announces it"] = function()
+  local result = child.lua([[
+    local calls = {}
+    local announced
+    vim.api.nvim_create_autocmd("User", {
+      pattern = "CodeCompanionACPSessionPost",
+      callback = function(event) announced = event.data.session_id end,
+    })
+    local connection = create_init_connection()
+    function connection:send_rpc_request(method, params)
+      table.insert(calls, method .. ":" .. (params and params.sessionId or ""))
+      if method == "initialize" then
+        return { protocolVersion = 1, authMethods = {}, agentCapabilities = { loadSession = true, sessionCapabilities = { fork = {} } } }
+      elseif method == "session/fork" then
+        return { sessionId = "forked-session" }
+      elseif method == "session/load" then
+        return {}
+      end
+    end
+
+    connection:connect_and_authenticate()
+    local ok = connection:load_session("source-session", { fork = true })
+    return { ok = ok, session_id = connection.session_id, called = calls, announced = announced }
+  ]])
+
+  h.eq(true, result.ok)
+  h.eq("forked-session", result.session_id)
+  h.eq(true, vim.tbl_contains(result.called, "session/fork:source-session"))
+  h.eq(true, vim.tbl_contains(result.called, "session/load:forked-session"))
+  h.eq("forked-session", result.announced)
+end
+
 T["ACP Connection"]["falls back to session/new if session/load fails"] = function()
   local result = child.lua([[
     local calls = {}
