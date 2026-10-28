@@ -56,6 +56,9 @@ function M.restore_session(chat, updates)
   process_user_chunks()
   process_llm_chunks()
 
+  -- The history is still queued in the builder, and ready_for_input decides on the next header from the last
+  -- role written: without the flush it saw the role the chat had before it was cleared
+  chat.builder:flush()
   chat:ready_for_input()
 end
 
