@@ -58,6 +58,34 @@ T["rewind"]["forks before the chosen turn and puts its prompt back"] = function(
   h.eq({ "third", "line" }, result.tail)
 end
 
+T["rewind"]["restores the chosen files and keeps earlier checkpoints"] = function()
+  local result = child.lua([[
+    local restored
+    package.loaded["codecompanion.interactions.chat.acp.checkpoints"] = {
+      restore = function(checkpoint, changes) restored = { tree = checkpoint.tree, changes = changes }; return true end,
+    }
+    package.loaded["codecompanion.interactions.chat.acp.rewind"] = nil
+    local rewind = require("codecompanion.interactions.chat.acp.rewind")
+
+    local chat, conn = rewind_chat(function(at)
+      return { { prompt = "first", agent_message_id = "m1" }, { prompt = "second", agent_message_id = at } }
+    end)
+    for i, turn in ipairs(conn._turns.source) do turn.checkpoint = { root = "/repo", tree = "tree" .. i } end
+
+    local files = { { status = "M", path = "a.lua" } }
+    local ok = rewind.to(chat, 3, { files = files })
+    local forked = conn:turns(conn.session_id)
+
+    package.loaded["codecompanion.interactions.chat.acp.checkpoints"] = nil
+    package.loaded["codecompanion.interactions.chat.acp.rewind"] = nil
+    return { ok = ok, restored = restored, carried = { forked[1].checkpoint.tree, forked[2].checkpoint.tree } }
+  ]])
+
+  h.eq(true, result.ok)
+  h.eq({ tree = "tree3", changes = { { status = "M", path = "a.lua" } } }, result.restored)
+  h.eq({ "tree1", "tree2" }, result.carried)
+end
+
 T["rewind"]["stays on the original session when the agent ignores the cut"] = function()
   local result = child.lua([[
     local chat, conn = rewind_chat(function() return { { prompt = "first", agent_message_id = "m1" }, { prompt = "second", agent_message_id = "m2" }, { prompt = "third", agent_message_id = "m3" } } end)

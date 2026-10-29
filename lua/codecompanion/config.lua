@@ -827,6 +827,8 @@ If you are providing code changes, use the edit_file tool (if available to you) 
         save_dir = vim.fs.joinpath(vim.fn.stdpath("data") --[[@as string]], "codecompanion", "sessions"),
       },
       opts = {
+        -- Before each prompt to an ACP agent, snapshot the working tree (in a git repository) so rewinding can restore files
+        file_checkpoints = true,
         context_management = {
           ---@type boolean|fun(adapter: CodeCompanion.HTTPAdapter|CodeCompanion.ACPAdapter): boolean
           enabled = true,

@@ -308,6 +308,7 @@ return {
       },
       opts = {
         debounce = 0,
+        file_checkpoints = false, -- Tests run in this repository: don't snapshot it on every prompt
         wait_timeout = 3000,
         system_prompt = "default system prompt",
       },

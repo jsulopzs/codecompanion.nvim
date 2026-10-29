@@ -1,3 +1,4 @@
+local checkpoints = require("codecompanion.interactions.chat.acp.checkpoints")
 local utils = require("codecompanion.utils")
 
 local M = {}
@@ -38,8 +39,10 @@ end
 ---Rewinding to the first turn starts a new session
 ---@param chat CodeCompanion.Chat
 ---@param index number The turn to rewind to, oldest first
+---@param opts? { files?: CodeCompanion.ACP.CheckpointChange[] } files are changes since the turn's checkpoint to undo too
 ---@return boolean success
-function M.to(chat, index)
+function M.to(chat, index, opts)
+  opts = opts or {}
   local ok, reason = M.enabled(chat)
   if not ok then
     utils.notify(reason, vim.log.levels.WARN)
@@ -89,6 +92,22 @@ function M.to(chat, index)
     end
   end
 
+  -- The fork's turns came from the replayed history, which knows nothing of the checkpoints taken before each prompt
+  local rewound = conn:turns(conn.session_id)
+  for i = 1, index - 1 do
+    if rewound[i] then
+      rewound[i].checkpoint = turns[i].checkpoint
+    end
+  end
+
+  if opts.files and #opts.files > 0 and turn.checkpoint then
+    if checkpoints.restore(turn.checkpoint, opts.files) then
+      utils.notify(("Restored %d file(s)"):format(#opts.files), vim.log.levels.INFO)
+    else
+      utils.notify("Some files could not be restored", vim.log.levels.WARN)
+    end
+  end
+
   refill(chat, turn.prompt)
   utils.fire("ACPChatRewound", {
     bufnr = chat.bufnr,
@@ -128,7 +147,46 @@ function M.pick(chat)
     end,
   }, function(choice)
     if choice then
-      M.to(chat, choice.index)
+      M.choose_files(chat, choice.index)
+    end
+  end)
+end
+
+---Summarise changed files for a one-line prompt
+---@param changes CodeCompanion.ACP.CheckpointChange[]
+---@return string
+local function describe(changes)
+  local shown = vim.tbl_map(function(change)
+    return (change.status == "A" and "+" or change.status == "D" and "-" or "~") .. change.path
+  end, vim.list_slice(changes, 1, 3))
+  local rest = #changes > 3 and (" and %d more"):format(#changes - 3) or ""
+  return table.concat(shown, ", ") .. rest
+end
+
+---Rewind to a turn, first asking whether to restore the files changed since it when there are any
+---@param chat CodeCompanion.Chat
+---@param index number
+---@return nil
+function M.choose_files(chat, index)
+  local turn = chat.acp_connection:turns(chat.acp_connection.session_id)[index]
+  local changes = turn and turn.checkpoint and checkpoints.changes(turn.checkpoint)
+  if not changes or #changes == 0 then
+    M.to(chat, index)
+    return
+  end
+
+  vim.ui.select({
+    { files = changes, label = ("Conversation and files (%d): %s"):format(#changes, describe(changes)) },
+    { label = "Conversation only" },
+  }, {
+    prompt = "Files changed since then. Restore them too?",
+    kind = "codecompanion.nvim",
+    format_item = function(item)
+      return item.label
+    end,
+  }, function(choice)
+    if choice then
+      M.to(chat, index, { files = choice.files })
     end
   end)
 end

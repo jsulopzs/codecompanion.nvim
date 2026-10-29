@@ -68,6 +68,7 @@ Connection.METHODS = METHODS
 ---@class CodeCompanion.ACP.Turn
 ---@field prompt string The user's prompt
 ---@field agent_message_id? string The last agent message of the reply: forking at it keeps this turn and drops every later one
+---@field checkpoint? CodeCompanion.ACP.Checkpoint The working tree just before the prompt, for rewinding files
 ---@field _collecting? boolean The prompt is still arriving in chunks of a replayed history
 
 ---@class CodeCompanion.ACP.Connection.PendingResponse
@@ -345,7 +346,11 @@ function Connection:start_turn(session_id, prompt)
     end)
     :join("\n")
   self._turns[session_id] = self._turns[session_id] or {}
-  table.insert(self._turns[session_id], { prompt = text })
+  local turn = { prompt = text }
+  if config.interactions.chat.opts.file_checkpoints then
+    turn.checkpoint = require("codecompanion.interactions.chat.acp.checkpoints").snapshot(vim.fn.getcwd())
+  end
+  table.insert(self._turns[session_id], turn)
 end
 
 ---Follow a session's turns through its updates: a replayed prompt starts a turn, and each agent message

@@ -244,8 +244,10 @@ The _rewind_ slash command (or `gu` in the chat buffer) lists the messages you'v
 
 It works with ACP agents that support `session/load` and `session/fork` and can fork at a message, such as Claude Code and Codex. If an agent forks without cutting, the chat stays on the original session and warns you.
 
+Rewinding can put your files back too. Before each prompt, the chat snapshots the working tree into git's object store, without touching your index, branch or stash. If files have changed since the message you pick, you're asked whether to restore them: files that changed or were deleted get their old content back, and files created since are removed. It sees every change on disk, whether the agent made it with an edit tool or a shell command, and your own edits too, so check the list before you accept.
+
 > [!NOTE]
-> Rewinding changes the conversation, not your files. Undo any edits the agent made with your version control.
+> File checkpoints work inside a git repository and skip files git ignores. They last as long as the chat: a resumed session has none for its earlier messages. Turn them off with `interactions.chat.opts.file_checkpoints = false`.
 
 ## /save
 
