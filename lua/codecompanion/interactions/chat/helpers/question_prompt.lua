@@ -193,6 +193,9 @@ function M.ask(chat, opts)
     utils.notify("The LLM has a question for you")
   end
 
+  -- The answer keys are normal-mode keymaps; mode changes once this returns, after they're bound
+  ui_utils.leave_insert_in(bufnr)
+
   local overrides = keymaps.Override.new(bufnr)
   local resolved = false
 

@@ -277,6 +277,16 @@ M.buf_is_active = function(bufnr)
   return api.nvim_get_current_buf() == bufnr
 end
 
+---Leave insert mode if the user is in it in this buffer, so its normal-mode keymaps answer at once
+---A prompt waiting on `g1`, `g2`... would otherwise just type the keys into a buffer that refuses them
+---@param bufnr number
+---@return nil
+M.leave_insert_in = function(bufnr)
+  if M.buf_is_active(bufnr) and api.nvim_get_mode().mode:sub(1, 1) == "i" then
+    vim.cmd("stopinsert")
+  end
+end
+
 ---@param bufnr nil|number
 ---@return number[]
 M.buf_list_wins = function(bufnr)

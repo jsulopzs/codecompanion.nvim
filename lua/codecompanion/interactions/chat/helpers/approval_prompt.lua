@@ -153,6 +153,7 @@ function M.request(chat, opts)
     end,
     on_done = on_done,
   })
+  ui_utils.leave_insert_in(bufnr)
 
   return on_done
 end
