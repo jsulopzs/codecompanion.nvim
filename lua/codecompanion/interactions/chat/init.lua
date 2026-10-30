@@ -1367,6 +1367,9 @@ end
 ---@return nil
 function Chat:submit(opts)
   if self.current_request then
+    if self.acp_connection and self.acp_connection._autonomous_turn then
+      return utils.notify("The agent is working. Wait for its turn to finish before sending.", vim.log.levels.INFO)
+    end
     return log:debug("Chat request already in progress")
   end
 

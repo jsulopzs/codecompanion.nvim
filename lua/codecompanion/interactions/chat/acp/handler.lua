@@ -34,7 +34,7 @@ function ACPHandler:start_autonomous_turn(opts)
     )
   end
 
-  chat:add_buf_message({ role = config.constants.LLM_ROLE, content = opts.cause or "" })
+  chat:add_buf_message({ role = config.constants.LLM_ROLE, content = opts.cause and (opts.cause .. "\n\n") or "" })
   if config.interactions.chat.opts.notify_on_acp_autonomous_turn and not chat.ui:is_visible() then
     vim.notify(
       opts.cause or "Agent started an autonomous turn",
@@ -43,6 +43,12 @@ function ACPHandler:start_autonomous_turn(opts)
     )
   end
   utils.fire("ACPAutonomousTurnStarted", { bufnr = chat.bufnr, session_id = opts.session_id, cause = opts.cause })
+end
+
+---Show a cause reported after an autonomous turn has started
+---@param cause string
+function ACPHandler:show_autonomous_cause(cause)
+  self.chat:add_buf_message({ role = config.constants.LLM_ROLE, content = "\n" .. cause .. "\n\n" })
 end
 
 ---Finish an autonomous turn and restore the user's draft

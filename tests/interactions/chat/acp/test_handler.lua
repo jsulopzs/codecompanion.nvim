@@ -69,11 +69,31 @@ T["ACPHandler"]["renders content received outside a prompt"] = function()
   h.is_true(result.busy)
 end
 
+T["ACPHandler"]["blocks submission during an autonomous turn"] = function()
+  local result = child.lua([[
+    local chat, connection = autonomous_chat()
+    autonomous_update(connection, { sessionUpdate = "async_task_spawned", taskType = "turn", asyncTaskId = "turn-busy" })
+    local submitted = false
+    chat._submit_acp = function() submitted = true end
+    local notified = false
+    local original_notify = vim.notify
+    vim.notify = function(message)
+      if message:find("The agent is working", 1, true) then notified = true end
+    end
+    chat:submit()
+    vim.notify = original_notify
+    return { submitted = submitted, notified = notified }
+  ]])
+  h.is_false(result.submitted)
+  h.is_true(result.notified)
+end
+
 T["ACPHandler"]["uses AIR marks and shows the cause"] = function()
   local result = child.lua([[
     local chat, connection = autonomous_chat()
     autonomous_update(connection, { sessionUpdate = "async_task_spawned", taskType = "turn", asyncTaskId = "turn-1", description = "A scheduled wakeup fired" })
     local started = chat.current_request ~= nil
+    autonomous_update(connection, { sessionUpdate = "async_task_progress", asyncTaskId = "turn-1", description = "A scheduled task fired" })
     autonomous_update(connection, { sessionUpdate = "agent_message_chunk", content = { type = "text", text = "Awake" } })
     autonomous_update(connection, { sessionUpdate = "async_task_state_update", asyncTaskId = "turn-1", state = "completed" })
     return { started = started, finished = chat.current_request == nil, text = table.concat(vim.api.nvim_buf_get_lines(chat.bufnr, 0, -1, false), "\n") }
@@ -81,6 +101,7 @@ T["ACPHandler"]["uses AIR marks and shows the cause"] = function()
   h.is_true(result.started)
   h.is_true(result.finished)
   h.is_true(result.text:find("A scheduled wakeup fired", 1, true) ~= nil)
+  h.is_true(result.text:find("A scheduled task fired", 1, true) ~= nil)
   h.is_true(result.text:find("Awake", 1, true) ~= nil)
 end
 
