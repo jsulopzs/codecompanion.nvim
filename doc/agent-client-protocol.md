@@ -32,6 +32,11 @@ CodeCompanion advertises these capabilities to agents:
     readTextFile = true,
     writeTextFile = true,
   },
+  _meta = {
+    jetbrains = {
+      air = { version = 1, capabilities = { "asyncTasks" } },
+    },
+  },
 }
 ```
 
