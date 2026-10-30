@@ -967,6 +967,11 @@ function Connection:_handle_autonomous_update(opts)
     if turn then
       turn.task_id, turn.marked = update.asyncTaskId, true
     end
+  elseif kind == "async_task_progress" and turn and update.asyncTaskId == turn.task_id then
+    if update.description and update.description ~= turn.cause then
+      turn.cause = update.description
+      turn.handler:show_autonomous_cause(update.description)
+    end
   elseif kind == "async_task_state_update" and turn and update.asyncTaskId == turn.task_id then
     if update.state == "completed" or update.state == "failed" or update.state == "stopped" then
       self:_finish_autonomous_turn({ stopped = update.state == "stopped" })
