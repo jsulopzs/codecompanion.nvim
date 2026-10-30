@@ -19,7 +19,7 @@ The [Agent Client Protocol (ACP)](https://agentclientprotocol.com/) is an open s
 | **Session Management** | ✅ | Create, list and load sessions |
 | **Session Config Options** | ✅ | Switch the agent's mode, model and other options |
 | **Tool Calls** | ✅ | Content blocks, file diffs, status updates |
-| **Agent Plans** | ❌ | Show an agent's execution plan |
+| **Agent Plans** | ✅ | Show an agent's execution plan |
 | **Terminal Operations** | ❌ | Give the agent a Neovim terminal |
 
 ### Client Capabilities
@@ -67,6 +67,12 @@ Agents expose their modes, models and other settings as [session config options]
 
 If an agent supports `session/list` and `session/load`, the [/resume](/usage/chat-buffer/slash-commands#resume) slash command lists its previous sessions and restores the one you pick into the chat buffer.
 
+### Autonomous Turns
+
+Some agents continue working after a prompt has ended. Claude Code can resume when a background command finishes, a scheduled wakeup fires or a cron task runs. CodeCompanion shows those updates as a new agent turn, keeps the chat busy until it ends and preserves any unsent text below a new user header. Press `q` to cancel the turn.
+
+CodeCompanion advertises the JetBrains AIR `asyncTasks` capability through `clientCapabilities._meta.jetbrains.air`. Claude Code uses this non-standard extension to mark the start and end of an autonomous turn and to report its cause. If an agent sends content without these marks, CodeCompanion closes the turn after a configurable idle period. The extension can be removed when ACP v2 supports updates outside a prompt. Codex does not currently send autonomous turns.
+
 ### Cleanup
 
 CodeCompanion disconnects from agents on Neovim's `VimLeavePre` autocmd, so their processes are stopped when Neovim exits.
@@ -81,7 +87,6 @@ The version is negotiated during initialisation. If an agent selects a different
 
 - **System prompts** - ACP has no way to send a system prompt. CodeCompanion doesn't merge its own into your messages either, so an agent behaves as it would if you used it directly
 - **Terminal operations** - The `terminal/*` methods aren't implemented, and CodeCompanion doesn't advertise a terminal capability
-- **Agent plans** - [Plan](https://agentclientprotocol.com/protocol/agent-plan) updates from agents aren't shown in the chat buffer
 - **Audio** - Audio can't be sent or received
 
 ## See Also

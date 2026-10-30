@@ -1,4 +1,4 @@
-*codecompanion.txt*         For NVIM v0.12        Last change: 2026 October 26
+*codecompanion.txt*         For NVIM v0.12        Last change: 2026 October 30
 
 ==============================================================================
 Table of Contents                            *codecompanion-table-of-contents*
@@ -7355,6 +7355,31 @@ See |codecompanion-configuration-adapters-acp| and
 |codecompanion-configuration-adapters-http| for the full list.
 
 
+AUTONOMOUS ACP TURNS ~
+
+When an ACP agent sends updates outside a prompt, CodeCompanion displays them
+in the chat. Agents that mark the turn's end close it directly. For agents
+without those marks, `acp_autonomous_turn_idle_ms` sets how long CodeCompanion
+waits after the last update. The default is `3000` milliseconds.
+`notify_on_acp_autonomous_turn` defaults to `true` and notifies you when the
+chat is outside the current tab.
+
+To change these options:
+
+>lua
+    require("codecompanion").setup({
+      interactions = {
+        chat = {
+          opts = {
+            acp_autonomous_turn_idle_ms = 5000, -- milliseconds
+            notify_on_acp_autonomous_turn = false,
+          },
+        },
+      },
+    })
+<
+
+
 COMPLETION ~
 
 CodeCompanion uses blink.cmp <https://github.com/saghen/blink.cmp>, nvim-cmp
@@ -14558,29 +14583,36 @@ LIST OF EVENTS ~
   -----------------------------------------------------------------------
 **ACP**
 
-  -----------------------------------------------------------------------
-  Event                               Fired
-  ----------------------------------- -----------------------------------
-  CodeCompanionACPConnected           After the connection is
-                                      authenticated and ready
+  ----------------------------------------------------------------------------
+  Event                                    Fired
+  ---------------------------------------- -----------------------------------
+  CodeCompanionACPConnected                After the connection is
+                                           authenticated and ready
 
-  CodeCompanionACPSessionPre          After authentication, before a
-                                      session starts, so you can change
-                                      the connection, such as adding MCP
-                                      servers
+  CodeCompanionACPAutonomousTurnStarted    When an agent starts a turn outside
+                                           a prompt, with bufnr, session_id
+                                           and optional cause
 
-  CodeCompanionACPSessionPost         After a session starts
+  CodeCompanionACPAutonomousTurnFinished   When that turn ends, with bufnr,
+                                           session_id and optional cause
 
-  CodeCompanionACPChatRestored        After a session is restored
+  CodeCompanionACPSessionPre               After authentication, before a
+                                           session starts, so you can change
+                                           the connection, such as adding MCP
+                                           servers
 
-  CodeCompanionACPCommandsUpdate      After an agent's commands are
-                                      loaded, with the commands in the
-                                      payload
+  CodeCompanionACPSessionPost              After a session starts
 
-  CodeCompanionChatACPConfigChanged   After an agent's configuration
-                                      options change, with the
-                                      config_options in the payload
-  -----------------------------------------------------------------------
+  CodeCompanionACPChatRestored             After a session is restored
+
+  CodeCompanionACPCommandsUpdate           After an agent's commands are
+                                           loaded, with the commands in the
+                                           payload
+
+  CodeCompanionChatACPConfigChanged        After an agent's configuration
+                                           options change, with the
+                                           config_options in the payload
+  ----------------------------------------------------------------------------
 **CLI**
 
   -----------------------------------------------------------------------
@@ -14835,7 +14867,7 @@ IMPLEMENTATION ~
 
   Tool Calls              ✅                      Content blocks, file diffs, status updates
 
-  Agent Plans             ❌                      Show an agent's execution plan
+  Agent Plans             ✅                      Show an agent's execution plan
 
   Terminal Operations     ❌                      Give the agent a Neovim terminal
   ----------------------------------------------------------------------------------------------------
@@ -14905,6 +14937,23 @@ If an agent supports `session/list` and `session/load`, the
 previous sessions and restores the one you pick into the chat buffer.
 
 
+AUTONOMOUS TURNS
+
+Some agents continue working after a prompt has ended. Claude Code can resume
+when a background command finishes, a scheduled wakeup fires or a cron task
+runs. CodeCompanion shows those updates as a new agent turn, keeps the chat
+busy until it ends and preserves any unsent text below a new user header. Press
+`q` to cancel the turn.
+
+CodeCompanion advertises the JetBrains AIR `asyncTasks` capability through
+`clientCapabilities._meta.jetbrains.air`. Claude Code uses this non-standard
+extension to mark the start and end of an autonomous turn and to report its
+cause. If an agent sends content without these marks, CodeCompanion closes the
+turn after a configurable idle period. The extension can be removed when ACP v2
+supports updates outside a prompt. Codex does not currently send autonomous
+turns.
+
+
 CLEANUP
 
 CodeCompanion disconnects from agents on Neovim's `VimLeavePre` autocmd, so
@@ -14924,7 +14973,6 @@ LIMITATIONS ~
 
 - **System prompts** - ACP has no way to send a system prompt. CodeCompanion doesn't merge its own into your messages either, so an agent behaves as it would if you used it directly
 - **Terminal operations** - The `terminal/*` methods aren't implemented, and CodeCompanion doesn't advertise a terminal capability
-- **Agent plans** - Plan <https://agentclientprotocol.com/protocol/agent-plan> updates from agents aren't shown in the chat buffer
 - **Audio** - Audio can't be sent or received
 
 

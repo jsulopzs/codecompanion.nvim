@@ -25,6 +25,25 @@ require("codecompanion").setup({
 
 See [ACP adapters](/configuration/adapters-acp) and [HTTP adapters](/configuration/adapters-http) for the full list.
 
+## Autonomous ACP Turns
+
+When an ACP agent sends updates outside a prompt, CodeCompanion displays them in the chat. Agents that mark the turn's end close it directly. For agents without those marks, `acp_autonomous_turn_idle_ms` sets how long CodeCompanion waits after the last update. The default is `3000` milliseconds. `notify_on_acp_autonomous_turn` defaults to `true` and notifies you when the chat is outside the current tab.
+
+To change these options:
+
+```lua
+require("codecompanion").setup({
+  interactions = {
+    chat = {
+      opts = {
+        acp_autonomous_turn_idle_ms = 5000, -- milliseconds
+        notify_on_acp_autonomous_turn = false,
+      },
+    },
+  },
+})
+```
+
 ## Completion
 
 CodeCompanion uses [blink.cmp](https://github.com/saghen/blink.cmp), [nvim-cmp](https://github.com/hrsh7th/nvim-cmp) or [coc.nvim](https://github.com/neoclide/coc.nvim), in that order, if one is installed. Otherwise, it falls back to Neovim's native completion. You can override this with:
