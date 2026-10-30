@@ -96,6 +96,8 @@ vim.api.nvim_exec_autocmds("User", {
 | Event | Fired |
 | --- | --- |
 | `CodeCompanionACPConnected` | After the connection is authenticated and ready |
+| `CodeCompanionACPAutonomousTurnStarted` | When an agent starts a turn outside a prompt, with `bufnr`, `session_id` and optional `cause` |
+| `CodeCompanionACPAutonomousTurnFinished` | When that turn ends, with `bufnr`, `session_id` and optional `cause` |
 | `CodeCompanionACPSessionPre` | After authentication, before a session starts, so you can change the connection, such as adding MCP servers |
 | `CodeCompanionACPSessionPost` | After a session starts or is loaded |
 | `CodeCompanionACPChatRestored` | After a session is restored |
