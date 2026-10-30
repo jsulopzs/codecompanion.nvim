@@ -808,6 +808,8 @@ If you are providing code changes, use the edit_file tool (if available to you) 
         save_dir = vim.fs.joinpath(vim.fn.stdpath("data") --[[@as string]], "codecompanion", "sessions"),
       },
       opts = {
+        acp_autonomous_turn_idle_ms = 3000, -- Close an unmarked ACP turn after this many milliseconds without updates
+        notify_on_acp_autonomous_turn = true, -- Notify when an autonomous ACP turn starts outside the current tab?
         context_management = {
           ---@type boolean|fun(adapter: CodeCompanion.HTTPAdapter|CodeCompanion.ACPAdapter): boolean
           enabled = true,

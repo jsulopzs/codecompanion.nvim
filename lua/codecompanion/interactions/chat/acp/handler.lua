@@ -19,6 +19,42 @@ local watch = require("codecompanion.interactions.shared.watch")
 ---@field _permission { queue: CodeCompanion.Queue, active: boolean, respond: function|nil } Internal state for managing permission requests
 local ACPHandler = {}
 
+---Start rendering an agent turn that has no prompt request
+---@param opts { session_id: string, cause?: string }
+function ACPHandler:start_autonomous_turn(opts)
+  local chat = self.chat
+  if chat._last_role == config.constants.USER_ROLE then
+    self._draft = vim.api.nvim_buf_get_lines(chat.bufnr, chat.header_line, -1, false)
+    vim.api.nvim_buf_set_lines(
+      chat.bufnr,
+      chat.builder.state.current_header_line or chat.header_line - 1,
+      -1,
+      false,
+      {}
+    )
+  end
+
+  chat:add_buf_message({ role = config.constants.LLM_ROLE, content = opts.cause or "" })
+  if config.interactions.chat.opts.notify_on_acp_autonomous_turn and not chat.ui:is_visible() then
+    vim.notify(
+      opts.cause or "Agent started an autonomous turn",
+      vim.log.levels.INFO,
+      { title = chat.title or chat.adapter.formatted_name }
+    )
+  end
+  utils.fire("ACPAutonomousTurnStarted", { bufnr = chat.bufnr, session_id = opts.session_id, cause = opts.cause })
+end
+
+---Finish an autonomous turn and restore the user's draft
+---@param opts { session_id: string, cause?: string, stopped?: boolean }
+function ACPHandler:finish_autonomous_turn(opts)
+  self:handle_complete({ status = opts.stopped and "stopped" or nil })
+  if self._draft and vim.api.nvim_buf_is_valid(self.chat.bufnr) then
+    vim.api.nvim_buf_set_lines(self.chat.bufnr, self.chat.header_line, -1, false, self._draft)
+  end
+  utils.fire("ACPAutonomousTurnFinished", { bufnr = self.chat.bufnr, session_id = opts.session_id, cause = opts.cause })
+end
+
 ---@param chat CodeCompanion.Chat
 ---@return CodeCompanion.Chat.ACPHandler
 function ACPHandler.new(chat)
@@ -218,8 +254,17 @@ function ACPHandler:create_and_send_prompt(payload)
   local transformed_payload = vim.deepcopy(payload)
   transformed_payload.messages = self:transform_acp_commands(payload.messages)
 
-  return self.chat.acp_connection
-    :session_prompt(transformed_payload.messages)
+  return self
+    :bind_updates(self.chat.acp_connection:session_prompt(transformed_payload.messages))
+    :with_options({ bufnr = self.chat.bufnr, interaction = "chat" })
+    :send()
+end
+
+---Attach the normal chat renderers to an ACP update receiver
+---@param prompt CodeCompanion.ACP.PromptBuilder
+---@return CodeCompanion.ACP.PromptBuilder
+function ACPHandler:bind_updates(prompt)
+  return prompt
     :on_message_chunk(function(content)
       self:handle_message_chunk(content)
     end)
@@ -231,6 +276,9 @@ function ACPHandler:create_and_send_prompt(payload)
     end)
     :on_tool_update(function(tool_call)
       self:process_tool_call(tool_call)
+    end)
+    :on_plan(function(entries)
+      self:handle_plan(entries)
     end)
     :on_permission_request(function(request)
       self:handle_permission_request(request)
@@ -244,8 +292,18 @@ function ACPHandler:create_and_send_prompt(payload)
     :on_cancel(function()
       self:_clear_permission_queue()
     end)
-    :with_options({ bufnr = self.chat.bufnr, interaction = "chat" })
-    :send()
+end
+
+---Show an agent plan in the chat
+---@param entries table[]
+function ACPHandler:handle_plan(entries)
+  local lines = {}
+  for _, entry in ipairs(entries) do
+    table.insert(lines, ("- [%s] %s"):format(entry.status or "pending", entry.content or ""))
+  end
+  if #lines > 0 then
+    self.chat:add_buf_message({ role = config.constants.LLM_ROLE, content = table.concat(lines, "\n") })
+  end
 end
 
 ---Handle incoming message chunks
@@ -464,14 +522,16 @@ end
 
 ---Handle the prompt response when it's complete
 ---@return nil
-function ACPHandler:handle_complete()
+---@param opts? { status?: "stopped" }
+function ACPHandler:handle_complete(opts)
+  opts = opts or {}
   self:_clear_permission_queue()
 
   if not self.chat.status or self.chat.status == "" then
     self.chat.status = "success"
   end
 
-  self.chat:done({ output = self.output, reasoning = self.reasoning, tools = {} })
+  self.chat:done({ output = self.output, reasoning = self.reasoning, tools = {}, status = opts.status })
 end
 
 ---Handle errors
