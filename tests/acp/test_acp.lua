@@ -97,6 +97,27 @@ T["ACP Connection"]["advertises form elicitation as a JSON object"] = function()
   h.expect_contains('"fs":{', capabilities)
 end
 
+T["ACP Connection"]["advertises AIR async tasks without changing adapter capabilities"] = function()
+  local result = child.lua([[
+    local connection = create_init_connection()
+    connection.adapter_modified = test_adapter
+    local sent
+    function connection:send_rpc_request(_, parameters)
+      sent = parameters.clientCapabilities
+      return { protocolVersion = 1, agentCapabilities = {} }
+    end
+    connection:_initialize()
+    return {
+      air = sent._meta.jetbrains.air,
+      fs = sent.fs,
+      original = test_adapter.parameters.clientCapabilities._meta,
+    }
+  ]])
+  h.eq({ version = 1, capabilities = { "asyncTasks" } }, result.air)
+  h.is_true(result.fs.readTextFile)
+  h.eq(nil, result.original)
+end
+
 T["ACP Connection"]["can handle real initialize response"] = function()
   child.lua([[
     connection = create_init_connection()

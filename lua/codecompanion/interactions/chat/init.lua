@@ -1789,6 +1789,11 @@ function Chat:stop()
   self:dispatch("on_cancelled")
   utils.fire("ChatStopped", { bufnr = self.bufnr, id = self.id })
 
+  if self.acp_connection and self.acp_connection._autonomous_turn then
+    self.acp_connection:cancel_autonomous_turn()
+    return
+  end
+
   if self.tool_orchestrator then
     local ok, err = pcall(function()
       self.tool_orchestrator:cancel()

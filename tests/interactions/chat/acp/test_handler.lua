@@ -17,6 +17,24 @@ T = new_set({
         _G.last_permission_request = nil
         _G.codecompanion_chat_metadata = {}
         package.loaded["codecompanion.acp"] = nil
+        function autonomous_chat()
+          local chat = h.setup_chat_buffer({
+            display = { chat = { stream_interval = 0 } },
+            interactions = { chat = { opts = { notify_on_acp_autonomous_turn = false, acp_autonomous_turn_idle_ms = 10 } } },
+          }, {
+            name = "test_acp",
+            config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } },
+          })
+          local connection = require("codecompanion.acp").new({ adapter = chat.adapter, chat = chat, session_id = "autonomous-session" })
+          connection._state.handle = { write = function(_, message) _G.autonomous_cancel = message end }
+          chat.acp_connection = connection
+          return chat, connection
+        end
+        function autonomous_update(connection, update)
+          connection:handle_incoming_request_or_notification({
+            method = "session/update", params = { sessionId = "autonomous-session", update = update }
+          })
+        end
       ]])
     end,
     post_once = function()
@@ -40,6 +58,81 @@ T = new_set({
 })
 
 T["ACPHandler"] = new_set()
+
+T["ACPHandler"]["renders content received outside a prompt"] = function()
+  local result = child.lua([[
+    local chat, connection = autonomous_chat()
+    autonomous_update(connection, { sessionUpdate = "agent_message_chunk", content = { type = "text", text = "TERMINADO" } })
+    chat.builder:flush()
+    return { text = table.concat(vim.api.nvim_buf_get_lines(chat.bufnr, 0, -1, false), "\n"), busy = chat.current_request ~= nil }
+  ]])
+  h.is_true(result.text:find("TERMINADO", 1, true) ~= nil)
+  h.is_true(result.busy)
+end
+
+T["ACPHandler"]["uses AIR marks and shows the cause"] = function()
+  local result = child.lua([[
+    local chat, connection = autonomous_chat()
+    autonomous_update(connection, { sessionUpdate = "async_task_spawned", taskType = "turn", asyncTaskId = "turn-1", description = "A scheduled wakeup fired" })
+    local started = chat.current_request ~= nil
+    autonomous_update(connection, { sessionUpdate = "agent_message_chunk", content = { type = "text", text = "Awake" } })
+    autonomous_update(connection, { sessionUpdate = "async_task_state_update", asyncTaskId = "turn-1", state = "completed" })
+    return { started = started, finished = chat.current_request == nil, text = table.concat(vim.api.nvim_buf_get_lines(chat.bufnr, 0, -1, false), "\n") }
+  ]])
+  h.is_true(result.started)
+  h.is_true(result.finished)
+  h.is_true(result.text:find("A scheduled wakeup fired", 1, true) ~= nil)
+  h.is_true(result.text:find("Awake", 1, true) ~= nil)
+end
+
+T["ACPHandler"]["closes an unmarked turn after inactivity"] = function()
+  local result = child.lua([[
+    local chat, connection = autonomous_chat()
+    autonomous_update(connection, { sessionUpdate = "agent_message_chunk", content = { type = "text", text = "Finished" } })
+    local busy = chat.current_request ~= nil
+    vim.wait(200, function() return chat.current_request == nil end, 5)
+    return { busy = busy, ready = chat.current_request == nil, role = chat._last_role }
+  ]])
+  h.is_true(result.busy)
+  h.is_true(result.ready)
+  h.eq("user", result.role)
+end
+
+T["ACPHandler"]["stops an autonomous turn with the chat stop action"] = function()
+  local result = child.lua([[
+    local chat, connection = autonomous_chat()
+    autonomous_update(connection, { sessionUpdate = "async_task_spawned", taskType = "turn", asyncTaskId = "turn-2" })
+    chat:stop()
+    return { finished = chat.current_request == nil, cancelled = _G.autonomous_cancel and _G.autonomous_cancel:find('session/cancel', 1, true) ~= nil }
+  ]])
+  h.is_true(result.finished)
+  h.is_true(result.cancelled)
+end
+
+T["ACPHandler"]["keeps a user draft after an autonomous turn"] = function()
+  local result = child.lua([[
+    local chat, connection = autonomous_chat()
+    vim.api.nvim_buf_set_lines(chat.bufnr, chat.header_line, -1, false, { "Unsent draft" })
+    autonomous_update(connection, { sessionUpdate = "async_task_spawned", taskType = "turn", asyncTaskId = "turn-3" })
+    autonomous_update(connection, { sessionUpdate = "agent_message_chunk", content = { type = "text", text = "Agent reply" } })
+    autonomous_update(connection, { sessionUpdate = "async_task_state_update", asyncTaskId = "turn-3", state = "completed" })
+    local text = table.concat(vim.api.nvim_buf_get_lines(chat.bufnr, 0, -1, false), "\n")
+    return { text = text, header_line = chat.header_line, draft = vim.api.nvim_buf_get_lines(chat.bufnr, chat.header_line, -1, false)[1] }
+  ]])
+  h.is_true(result.text:find("Agent reply", 1, true) ~= nil)
+  h.eq("Unsent draft", result.draft)
+end
+
+T["ACPHandler"]["ignores autonomous updates without a chat"] = function()
+  local result = child.lua([[
+    local _, connection = autonomous_chat()
+    connection.chat = nil
+    local ok = pcall(autonomous_update, connection, { sessionUpdate = "agent_message_chunk", content = { type = "text", text = "Ignored" } })
+    return { ok = ok, started = connection._autonomous_turn ~= nil }
+  ]])
+  h.is_true(result.ok)
+  h.is_false(result.started)
+end
 
 T["ACPHandler"]["establishes connection when needed"] = function()
   local result = child.lua([[

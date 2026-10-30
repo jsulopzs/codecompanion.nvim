@@ -51,6 +51,7 @@ local uv = vim.uv
 ---@field _initialized boolean
 ---@field _authenticated boolean
 ---@field _active_prompt CodeCompanion.ACP.PromptBuilder|nil
+---@field _autonomous_turn? { handler: CodeCompanion.Chat.ACPHandler, receiver: CodeCompanion.ACP.PromptBuilder, session_id: string, task_id?: string, marked: boolean, idle_generation: number, cause?: string }
 ---@field _state {handle: table, id_gen: CodeCompanion.JsonRPC.IdGenerator, line_buffer: CodeCompanion.JsonRPC.LineBuffer}
 ---@field _loading_session boolean|nil
 ---@field _on_session_update function|nil
@@ -211,7 +212,13 @@ function Connection:_initialize()
     return true
   end
 
-  local initialized = self:send_rpc_request(METHODS.INITIALIZE, self.adapter_modified.parameters)
+  local parameters = vim.deepcopy(self.adapter_modified.parameters)
+  parameters.clientCapabilities = parameters.clientCapabilities or {}
+  parameters.clientCapabilities._meta = parameters.clientCapabilities._meta or {}
+  parameters.clientCapabilities._meta.jetbrains = parameters.clientCapabilities._meta.jetbrains or {}
+  -- AIR asyncTasks is an interim extension until ACP v2 supports updates outside a prompt.
+  parameters.clientCapabilities._meta.jetbrains.air = { version = 1, capabilities = { "asyncTasks" } }
+  local initialized = self:send_rpc_request(METHODS.INITIALIZE, parameters)
   if not initialized then
     log:error("[acp::_initialize] Failed to initialize")
     return false
@@ -873,6 +880,108 @@ function Connection:send_notification(method, params)
   self:write_message(self.methods.encode(jsonrpc.notification(method, params)) .. "\n")
 end
 
+local AUTONOMOUS_CONTENT = {
+  agent_message_chunk = true,
+  agent_thought_chunk = true,
+  tool_call = true,
+  tool_call_update = true,
+  plan = true,
+}
+
+---Open an autonomous turn for a chat attached to this session
+---@param opts { session_id: string, cause?: string, task_id?: string }
+function Connection:_start_autonomous_turn(opts)
+  local chat = self:get_chat(opts.session_id)
+  if not chat or not api.nvim_buf_is_valid(chat.bufnr) or chat.current_request then
+    return nil
+  end
+
+  local handler = require("codecompanion.interactions.chat.acp.handler").new(chat)
+  local receiver = handler:bind_updates(PromptBuilder.for_updates(self))
+  local turn = {
+    handler = handler,
+    receiver = receiver,
+    session_id = opts.session_id,
+    task_id = opts.task_id,
+    marked = opts.task_id ~= nil,
+    idle_generation = 0,
+    cause = opts.cause,
+  }
+  self._autonomous_turn = turn
+  chat.current_request = {
+    cancel = function()
+      self:cancel_autonomous_turn()
+    end,
+  }
+  handler:start_autonomous_turn({ session_id = opts.session_id, cause = opts.cause })
+  return turn
+end
+
+---Close the current autonomous turn
+---@param opts? { stopped?: boolean }
+function Connection:_finish_autonomous_turn(opts)
+  opts = opts or {}
+  local turn = self._autonomous_turn
+  if not turn then
+    return
+  end
+  self._autonomous_turn = nil
+  turn.handler:finish_autonomous_turn({ session_id = turn.session_id, cause = turn.cause, stopped = opts.stopped })
+end
+
+---Cancel an autonomous turn through its ACP session
+function Connection:cancel_autonomous_turn()
+  local turn = self._autonomous_turn
+  if not turn then
+    return
+  end
+  self:send_notification(METHODS.SESSION_CANCEL, { sessionId = turn.session_id })
+  self:_finish_autonomous_turn({ stopped = true })
+end
+
+---Close an unmarked turn after a quiet period
+---@param turn table
+function Connection:_schedule_autonomous_idle(turn)
+  turn.idle_generation = turn.idle_generation + 1
+  local generation = turn.idle_generation
+  vim.defer_fn(function()
+    if self._autonomous_turn == turn and not turn.marked and turn.idle_generation == generation then
+      self:_finish_autonomous_turn()
+    end
+  end, config.interactions.chat.opts.acp_autonomous_turn_idle_ms)
+end
+
+---Route updates received without a prompt to one chat turn
+---@param opts { session_id: string, update: table }
+function Connection:_handle_autonomous_update(opts)
+  local update = opts.update
+  local kind = update.sessionUpdate
+  local turn = self._autonomous_turn
+  if kind == "async_task_spawned" and update.taskType == "turn" then
+    turn = turn
+      or self:_start_autonomous_turn({
+        session_id = opts.session_id,
+        task_id = update.asyncTaskId,
+        cause = update.description,
+      })
+    if turn then
+      turn.task_id, turn.marked = update.asyncTaskId, true
+    end
+  elseif kind == "async_task_state_update" and turn and update.asyncTaskId == turn.task_id then
+    if update.state == "completed" or update.state == "failed" or update.state == "stopped" then
+      self:_finish_autonomous_turn({ stopped = update.state == "stopped" })
+    end
+  elseif AUTONOMOUS_CONTENT[kind] then
+    turn = turn or self:_start_autonomous_turn({ session_id = opts.session_id })
+    if turn then
+      turn.receiver:handle_session_update(update)
+      if not turn.marked then
+        self:_schedule_autonomous_idle(turn)
+      end
+    end
+  end
+end
+
 ---@private
 local DISPATCH = {
   [METHODS.SESSION_UPDATE] = function(self, m)
@@ -896,6 +1005,8 @@ local DISPATCH = {
       self._on_session_update(m.params.update)
     elseif self._active_prompt then
       self._active_prompt:handle_session_update(m.params.update)
+    elseif m.params.update then
+      self:_handle_autonomous_update({ session_id = m.params.sessionId, update = m.params.update })
     end
   end,
   [METHODS.SESSION_REQUEST_PERMISSION] = function(self, m)
@@ -1126,6 +1237,10 @@ function Connection:handle_process_exit(code, signal)
   self._pending_callbacks = {}
   self.pending_responses = {}
   self.session_id = nil
+
+  if self._autonomous_turn then
+    self:_finish_autonomous_turn({ stopped = true })
+  end
 
   if self._active_prompt and self._active_prompt.handle_done then
     pcall(function()

@@ -33,6 +33,16 @@ function PromptBuilder.new(connection, messages)
   return self
 end
 
+---Create a receiver for updates outside a prompt request
+---@param connection CodeCompanion.ACP.Connection
+---@return CodeCompanion.ACP.PromptBuilder
+function PromptBuilder.for_updates(connection)
+  return setmetatable(
+    { connection = connection, handlers = {}, options = { silent = true }, _streaming_started = false },
+    PromptBuilder
+  )
+end
+
 ---Handlers
 function PromptBuilder:on_message_chunk(fn)
   self.handlers.message_chunk = fn
