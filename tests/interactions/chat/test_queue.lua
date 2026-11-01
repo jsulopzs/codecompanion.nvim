@@ -144,6 +144,22 @@ T["Queue"]["rejects rewind and resume while preserving the queue"] = function()
   h.eq(0, result.count)
 end
 
+T["Queue"]["warns when a queued slash command will be sent as text"] = function()
+  local result = child.lua([[
+    local queue, chat = make_queue()
+    chat.current_request = {}
+    local warnings = {}
+    local original_notify = vim.notify
+    vim.notify = function(message) table.insert(warnings, message) end
+    queue:add({ text = "/buffer" })
+    queue:add({ text = "Review /file existing.lua" })
+    vim.notify = original_notify
+    return warnings
+  ]])
+  h.eq(1, #result)
+  h.is_true(result[1]:find("/buffer will be sent as text", 1, true) ~= nil)
+end
+
 T["Queue"]["expands editor context when a prompt leaves the queue"] = function()
   local result = child.lua([[
     local queue, chat = make_queue()

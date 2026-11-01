@@ -1,5 +1,16 @@
 local M = {}
 
+---@param text string
+---@return string|nil
+function M.unexpanded_command(text)
+  local commands = require("codecompanion.config").interactions.chat.slash_commands
+  for command in (" " .. text):gmatch("%s/([%w_-]+)") do
+    if commands[command] and not (command == "file" and text:match("/file%s+[^%s]+")) then
+      return command
+    end
+  end
+end
+
 ---@param opts { chat: CodeCompanion.Chat, text: string }
 ---@return string|nil
 function M.expand(opts)

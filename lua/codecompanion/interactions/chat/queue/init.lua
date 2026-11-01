@@ -109,6 +109,10 @@ function Queue:add(opts)
     vim.notify("/rewind and /resume must run now", vim.log.levels.WARN)
     return nil
   end
+  local command = require("codecompanion.interactions.chat.queue.dispatcher").unexpanded_command(opts.text)
+  if command then
+    vim.notify("/" .. command .. " will be sent as text when this prompt leaves the queue", vim.log.levels.WARN)
+  end
   local item = {
     id = tostring(vim.uv.hrtime()),
     session_id = self.session_id,

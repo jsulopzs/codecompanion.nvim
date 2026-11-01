@@ -3646,12 +3646,18 @@ you write. Completion for slash commands and editor context uses the same
   q in normal mode                    Stop the active turn and pause the
                                       queue
   -----------------------------------------------------------------------
-Queued prompts leave in arrival order after the agent ends its turn. The
-manager shows pending and parked prompts. Use `<CR>` to send one now, `e` to
-edit, `dd` to remove, `K` or `J` to move, `P` to move to the front, `p` to
-switch between parked and queued and `r` to resume a paused queue. A failed
-prompt stays in the queue for review. `/rewind` and `/resume` must run
-immediately and cannot be queued.
+Queued prompts leave in arrival order after the agent ends its turn. A prompt
+leaves the queue as soon as the agent accepts it, even if the turn later stops
+or fails. The manager shows pending and parked prompts. Use `<CR>` to send one
+now, `e` to edit, `dd` to remove, `K` or `J` to move, `P` to move to the front,
+`p` to switch between parked and queued and `r` to resume a paused queue. A
+prompt that fails before the agent accepts it stays in the queue for review.
+`/rewind` and `/resume` must run immediately and cannot be queued.
+
+When a queued prompt is sent, `#buffer` and other configured editor context
+names expand, and `/file <path>` attaches an existing file. Other CodeCompanion
+slash commands are sent as text; CodeCompanion warns when you queue one. Run
+commands that open a picker directly before queuing the resulting prompt.
 
 The queue is saved per ACP session in Neovim's state directory. Closing the
 chat pauses it. Reopening the session restores its prompts and parked ideas.
