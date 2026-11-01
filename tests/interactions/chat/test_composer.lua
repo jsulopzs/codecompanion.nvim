@@ -50,6 +50,23 @@ T["Composer"]["shows the keys under the text, whatever the statusline"] = functi
   h.expect_contains("q stop", result.busy.text)
 end
 
+T["Composer"]["shows active task and schedule counts only when present"] = function()
+  local result = child.lua([[
+    local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })
+    local function hint()
+      local marks = vim.api.nvim_buf_get_extmarks(chat.composer.bufnr, -1, 0, -1, { details = true })
+      return marks[#marks][4].virt_lines[1][1][1]
+    end
+    local empty = hint()
+    chat.acp_connection = { task_detail_supported = function(_, detail) return detail == "schedules" end }
+    chat.tasks:update({ sessionUpdate = "async_task_spawned", asyncTaskId = "one", taskType = "shell", name = "build" })
+    chat.tasks:update({ sessionUpdate = "session_schedules_update", schedules = { { id = "every-20" } } })
+    return { empty, hint() }
+  ]])
+  h.is_false(result[1]:find("tasks", 1, true) ~= nil)
+  h.expect_contains("1 task · 1 scheduled", result[2])
+end
+
 T["Composer"]["submits text as a visible user message"] = function()
   local result = child.lua([[
     local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })

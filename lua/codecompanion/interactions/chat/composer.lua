@@ -117,6 +117,15 @@ function Composer:update_status()
   if self.chat.queue.paused then
     state = state .. ", queue paused"
   end
+  if self.chat.tasks then
+    local active, scheduled = self.chat.tasks:counts()
+    if active > 0 then
+      state = state .. string.format(" · %d %s", active, active == 1 and "task" or "tasks")
+    end
+    if scheduled > 0 then
+      state = state .. string.format(" · %d scheduled", scheduled)
+    end
+  end
   local hint = string.format(
     "%s · %s %s · %s queue · %s park · %s manage%s",
     state,
