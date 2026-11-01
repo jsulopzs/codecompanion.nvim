@@ -64,6 +64,23 @@ T["Chat"]["buffer editor context is handled"] = function()
   h.eq(tags.EDITOR_CONTEXT, last_message_tag)
 end
 
+T["Chat"]["announces a new title"] = function()
+  local fired = child.lua([[
+    local seen
+    vim.api.nvim_create_autocmd("User", {
+      pattern = "CodeCompanionChatTitle",
+      once = true,
+      callback = function(event)
+        seen = event.data
+      end,
+    })
+    _G.chat:set_title("Agent title")
+    return { bufnr = seen.bufnr == _G.chat.bufnr, title = seen.title }
+  ]])
+  h.is_true(fired.bufnr)
+  h.eq("Agent title", fired.title)
+end
+
 T["Chat"]["can change the model"] = function()
   child.lua([[_G.chat:change_model({ model = "gpt-4o" })]])
 

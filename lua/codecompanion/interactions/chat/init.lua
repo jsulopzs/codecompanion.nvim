@@ -2275,6 +2275,7 @@ function Chat:set_title(title)
   pcall(function()
     api.nvim_buf_set_name(self.bufnr, title)
   end)
+  utils.fire("ChatTitle", { bufnr = self.bufnr, id = self.id, title = title })
 
   return self
 end

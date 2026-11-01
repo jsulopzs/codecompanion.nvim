@@ -14665,6 +14665,9 @@ LIST OF EVENTS ~
 
   CodeCompanionChatModel              After the model is set
 
+  CodeCompanionChatTitle              After the chat’s title is set, with the
+                                      `title` in the payload
+
   CodeCompanionChatToolAdded          After a tool is added, with the
                                       tool in the payload
   -----------------------------------------------------------------------
