@@ -218,6 +218,7 @@ function Connection:_initialize()
   parameters.clientCapabilities._meta.jetbrains = parameters.clientCapabilities._meta.jetbrains or {}
   -- AIR asyncTasks is an interim extension until ACP v2 supports updates outside a prompt.
   parameters.clientCapabilities._meta.jetbrains.air = { version = 1, capabilities = { "asyncTasks" } }
+  parameters.clientCapabilities._meta.asyncTaskDetails = { monitors = true, schedules = true, output = true }
   local initialized = self:send_rpc_request(METHODS.INITIALIZE, parameters)
   if not initialized then
     log:error("[acp::_initialize] Failed to initialize")
@@ -248,6 +249,12 @@ function Connection:_initialize()
   })
 
   return true
+end
+
+---@param detail "monitors"|"schedules"|"output"
+function Connection:task_detail_supported(detail)
+  local meta = self._agent_info and self._agent_info._meta
+  return meta and meta.asyncTaskDetails and meta.asyncTaskDetails[detail] == true or false
 end
 
 ---Connect and initialize the ACP process and establish the session
@@ -1015,6 +1022,10 @@ end
 local DISPATCH = {
   [METHODS.SESSION_UPDATE] = function(self, m)
     self:_record_turn_update(m.params.sessionId, m.params.update)
+    local chat = self:get_chat(m.params.sessionId)
+    if chat and chat.tasks and m.params.update then
+      chat.tasks:update(m.params.update)
+    end
     if m.params.update and m.params.update.sessionUpdate == "available_commands_update" then
       self:handle_available_commands_update(m.params.sessionId, m.params.update.availableCommands)
     elseif m.params.update and m.params.update.sessionUpdate == "config_option_update" then
@@ -1266,6 +1277,10 @@ function Connection:handle_process_exit(code, signal)
   self._pending_callbacks = {}
   self.pending_responses = {}
   self.session_id = nil
+
+  if self.chat and self.chat.tasks then
+    self.chat.tasks:attach(nil, { reset = true })
+  end
 
   if self._autonomous_turn then
     self:_finish_autonomous_turn({ stopped = true })

@@ -104,16 +104,22 @@ T["ACP Connection"]["advertises AIR async tasks without changing adapter capabil
     local sent
     function connection:send_rpc_request(_, parameters)
       sent = parameters.clientCapabilities
-      return { protocolVersion = 1, agentCapabilities = {} }
+      return { protocolVersion = 1, agentCapabilities = {}, _meta = { asyncTaskDetails = { output = true } } }
     end
     connection:_initialize()
     return {
       air = sent._meta.jetbrains.air,
+      details = sent._meta.asyncTaskDetails,
+      output = connection:task_detail_supported("output"),
+      schedules = connection:task_detail_supported("schedules"),
       fs = sent.fs,
       original = test_adapter.parameters.clientCapabilities._meta,
     }
   ]])
   h.eq({ version = 1, capabilities = { "asyncTasks" } }, result.air)
+  h.eq({ monitors = true, schedules = true, output = true }, result.details)
+  h.is_true(result.output)
+  h.is_false(result.schedules)
   h.is_true(result.fs.readTextFile)
   h.eq(nil, result.original)
 end
