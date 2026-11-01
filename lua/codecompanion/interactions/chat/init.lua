@@ -1621,7 +1621,10 @@ function Chat:send_now(text, callback)
       prompt = { { type = "text", text = text } },
       callback = function(ok)
         if ok then
-          self:add_buf_message({ role = config.constants.USER_ROLE, content = "Correction: " .. text })
+          self:add_buf_message(
+            { role = config.constants.USER_ROLE, content = "Correction: " .. text },
+            { force_role = true }
+          )
           self:add_message(
             { role = config.constants.USER_ROLE, content = text },
             { visible = false, _meta = { sent = true, correction = true } }

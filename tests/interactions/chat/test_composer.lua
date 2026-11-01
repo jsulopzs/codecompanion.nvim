@@ -101,4 +101,31 @@ T["Composer"]["removes a queued prompt when its agent starts streaming"] = funct
   h.is_true(result.sending)
 end
 
+T["Composer"]["shows an injected correction as a separate user message"] = function()
+  local result = child.lua([[
+    local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })
+    function chat:_submit_acp() self.current_request = {} end
+    chat:send_text("Respond with AZUL.")
+    chat.acp_connection = {
+      session_id = "session-1",
+      can_steer = function() return true end,
+      steer = function(_, opts) opts.callback(true); return true end,
+    }
+    chat:send_now("Change to ROJO.")
+    local lines = vim.api.nvim_buf_get_lines(chat.bufnr, 0, -1, false)
+    local before, correction
+    local headers = 0
+    for index, line in ipairs(lines) do
+      if line == "## foo" then headers = headers + 1 end
+      if line:find("Respond with AZUL.", 1, true) then before = index end
+      if line:find("Correction: Change to ROJO.", 1, true) then correction = index end
+    end
+    return { separate = before ~= correction, correction = correction and lines[correction], marked = chat.messages[#chat.messages]._meta.correction, headers = headers }
+  ]])
+  h.is_true(result.separate)
+  h.eq("Correction: Change to ROJO.", result.correction)
+  h.is_true(result.marked)
+  h.eq(2, result.headers)
+end
+
 return T
