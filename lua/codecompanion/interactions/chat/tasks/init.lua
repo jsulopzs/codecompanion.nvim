@@ -63,7 +63,12 @@ function Tasks:update(update)
     for key, value in pairs(update) do
       task[key] = value
     end
-    if not was_finished and (task.state == "completed" or task.state == "failed") and self.chat.ui and not self.chat.ui:is_visible() then
+    if
+      not was_finished
+      and (task.state == "completed" or task.state == "failed")
+      and self.chat.ui
+      and not self.chat.ui:is_visible()
+    then
       vim.notify(task.summary or (task.name or task.asyncTaskId) .. " · " .. task.state, vim.log.levels.INFO, {
         title = self.chat.title or self.chat.adapter.formatted_name,
       })
