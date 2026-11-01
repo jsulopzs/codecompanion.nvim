@@ -3,6 +3,7 @@ local input = require("codecompanion.interactions.shared.input")
 local utils = require("codecompanion.utils")
 
 local api = vim.api
+local ns = api.nvim_create_namespace("codecompanion.composer.hints")
 local Composer = {}
 Composer.__index = Composer
 
@@ -40,9 +41,10 @@ function Composer.new(chat)
       chat.queue:pause("cancelled")
     end
   end)
-  api.nvim_create_autocmd("TextChangedI", {
+  api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
     buffer = self.bufnr,
     callback = function()
+      self:update_status()
       self:update_height()
     end,
   })
@@ -98,25 +100,37 @@ function Composer:update_height()
     return
   end
   local settings = config.interactions.chat.composer
-  local lines = api.nvim_buf_get_lines(self.bufnr, 0, -1, false)
-  api.nvim_win_set_height(self.winnr, math.min(settings.max_height, math.max(settings.min_height, #lines)))
+  -- One more row for the key hints drawn under the text
+  local rows = api.nvim_buf_line_count(self.bufnr) + 1
+  api.nvim_win_set_height(self.winnr, math.min(settings.max_height, math.max(settings.min_height, rows)))
 end
 
+---Show the state and what each key does now as a dim line under the text.
+---Drawn in the buffer, not the statusline, so a global statusline (laststatus=3) can't hide it
 function Composer:update_status()
-  if not self.winnr or not api.nvim_win_is_valid(self.winnr) then
+  if not api.nvim_buf_is_valid(self.bufnr) then
     return
   end
-  local queue = self.chat.queue
+  local keys = config.interactions.chat.composer.keymaps
   local busy = self.chat.current_request ~= nil
   local state = busy and "working" or "ready"
-  if queue.paused then
+  if self.chat.queue.paused then
     state = state .. ", queue paused"
   end
-  vim.wo[self.winnr].statusline = string.format(
-    " Composer: %s | Ctrl-S %s | Alt-Enter queue | gp park | gQ manage ",
+  local hint = string.format(
+    "%s · %s %s · %s queue · %s park · %s manage%s",
     state,
-    busy and "correct" or "send"
+    keys.send,
+    busy and "correct" or "send",
+    keys.queue,
+    keys.park,
+    keys.manager,
+    busy and " · q stop" or ""
   )
+  api.nvim_buf_clear_namespace(self.bufnr, ns, 0, -1)
+  api.nvim_buf_set_extmark(self.bufnr, ns, api.nvim_buf_line_count(self.bufnr) - 1, 0, {
+    virt_lines = { { { hint, "Comment" } } },
+  })
 end
 
 ---@param kind "now"|"queue"|"parked"

@@ -28,6 +28,28 @@ T["Composer"]["is editable while the history is locked"] = function()
   h.eq("Next prompt", result.draft)
 end
 
+T["Composer"]["shows the keys under the text, whatever the statusline"] = function()
+  local result = child.lua([[
+    local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })
+    local function hint()
+      local marks = vim.api.nvim_buf_get_extmarks(chat.composer.bufnr, -1, 0, -1, { details = true })
+      local mark = marks[#marks]
+      return { row = mark[2], text = mark[4].virt_lines[1][1][1] }
+    end
+    local idle = hint()
+    vim.api.nvim_buf_set_lines(chat.composer.bufnr, 0, -1, false, { "one", "two" })
+    chat.current_request = {}
+    chat.composer:update_status()
+    return { idle = idle, busy = hint() }
+  ]])
+  h.eq(0, result.idle.row)
+  h.expect_contains("<C-s> send", result.idle.text)
+  h.expect_contains("<M-CR> queue", result.idle.text)
+  h.eq(1, result.busy.row)
+  h.expect_contains("<C-s> correct", result.busy.text)
+  h.expect_contains("q stop", result.busy.text)
+end
+
 T["Composer"]["submits text as a visible user message"] = function()
   local result = child.lua([[
     local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })
