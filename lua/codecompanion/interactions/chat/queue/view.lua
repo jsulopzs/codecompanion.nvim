@@ -95,6 +95,7 @@ function M.open(queue)
     end
   end
   local bufnr = vim.api.nvim_create_buf(false, true)
+  vim.bo[bufnr].bufhidden = "wipe"
   vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
   vim.bo[bufnr].modifiable = false
   local width = math.min(100, math.max(50, vim.o.columns - 8))

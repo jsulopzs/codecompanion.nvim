@@ -36,6 +36,7 @@ end
 function M.open(opts)
   local bufnr = vim.api.nvim_create_buf(false, true)
   vim.bo[bufnr].buftype = "nofile"
+  vim.bo[bufnr].bufhidden = "wipe"
   vim.bo[bufnr].modifiable = false
   vim.cmd("belowright split")
   local win = vim.api.nvim_get_current_win()
