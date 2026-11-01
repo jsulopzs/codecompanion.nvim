@@ -92,7 +92,7 @@ T["Queue"]["pauses after stop and error"] = function()
   h.is_true(result.paused)
 end
 
-T["Queue"]["keeps a failed prompt first until resumed"] = function()
+T["Queue"]["keeps a prompt rejected before acceptance first until resumed"] = function()
   local result = child.lua([[
     local queue, chat = make_queue()
     chat.current_request = {}
@@ -101,7 +101,7 @@ T["Queue"]["keeps a failed prompt first until resumed"] = function()
     chat.current_request = nil
     queue:dispatch()
     chat.current_request = nil
-    queue:turn_finished({ reason = "max_tokens" })
+    queue:turn_finished({ reason = "error", error = "Connection lost" })
     local failed = queue.items[1].state
     queue:resume()
     return { failed = failed, sent = chat.sent, first = queue.items[1].text }
@@ -109,6 +109,27 @@ T["Queue"]["keeps a failed prompt first until resumed"] = function()
   h.eq("failed", result.failed)
   h.eq({ "first", "first" }, result.sent)
   h.eq("first", result.first)
+end
+
+T["Queue"]["does not resend a prompt accepted before cancellation"] = function()
+  local result = child.lua([[
+    local queue, chat = make_queue()
+    chat.current_request = {}
+    queue:add({ text = "first" })
+    queue:add({ text = "second" })
+    chat.current_request = nil
+    queue:dispatch()
+    queue:mark_accepted()
+    chat.current_request = nil
+    queue:turn_finished({ reason = "canceled" })
+    local paused = queue.paused
+    queue:resume()
+    return { sent = chat.sent, paused = paused, remaining = #queue.items, first = queue.items[1].text }
+  ]])
+  h.eq({ "first", "second" }, result.sent)
+  h.is_true(result.paused)
+  h.eq(1, result.remaining)
+  h.eq("second", result.first)
 end
 
 T["Queue"]["rejects rewind and resume while preserving the queue"] = function()

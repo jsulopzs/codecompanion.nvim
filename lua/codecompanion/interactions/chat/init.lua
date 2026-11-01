@@ -739,6 +739,15 @@ function Chat.new(args)
     })
     api.nvim_create_autocmd("User", {
       group = group,
+      pattern = "CodeCompanionRequestStreaming",
+      callback = function(event)
+        if event.data.bufnr == self.bufnr then
+          self.queue:mark_accepted()
+        end
+      end,
+    })
+    api.nvim_create_autocmd("User", {
+      group = group,
       pattern = { "CodeCompanionACPChatRestored", "CodeCompanionACPChatRewound" },
       callback = function(event)
         if event.data.bufnr == self.bufnr then

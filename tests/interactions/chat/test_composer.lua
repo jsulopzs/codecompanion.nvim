@@ -44,4 +44,22 @@ T["Composer"]["submits text as a visible user message"] = function()
   h.is_true(result.visible)
 end
 
+T["Composer"]["removes a queued prompt when its agent starts streaming"] = function()
+  local result = child.lua([[
+    local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })
+    chat.acp_connection = {}
+    chat.current_request = {}
+    chat.queue:add({ text = "next" })
+    function chat:send_text() self.current_request = {}; return true end
+    chat.current_request = nil
+    chat.queue:dispatch()
+    local item = chat.queue.sending
+    vim.api.nvim_exec_autocmds("User", { pattern = "CodeCompanionRequestStreaming", data = { bufnr = chat.bufnr } })
+    return { remaining = #chat.queue.items, state = item.state, sending = chat.queue.sending == item }
+  ]])
+  h.eq(0, result.remaining)
+  h.eq("sent", result.state)
+  h.is_true(result.sending)
+end
+
 return T

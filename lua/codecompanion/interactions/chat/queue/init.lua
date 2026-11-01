@@ -139,27 +139,36 @@ function Queue:dispatch()
   require("codecompanion.interactions.chat.queue.dispatcher").dispatch(self)
 end
 
+function Queue:mark_accepted()
+  local item = self.sending
+  if not item or item.state == "sent" then
+    return
+  end
+  for index, queued in ipairs(self.items) do
+    if queued == item then
+      table.remove(self.items, index)
+      break
+    end
+  end
+  item.state = "sent"
+  item.sent_at = os.time()
+  self:_changed()
+end
+
 ---@param opts { reason?: string, error?: string }
 function Queue:turn_finished(opts)
   local item = self.sending
+  if item and opts.reason == "end_turn" and not opts.error then
+    self:mark_accepted()
+  end
   self.sending = nil
-  if item then
-    if opts.reason == "end_turn" and not opts.error then
-      for index, queued in ipairs(self.items) do
-        if queued == item then
-          table.remove(self.items, index)
-          break
-        end
-      end
-      item.state = "sent"
-      item.sent_at = os.time()
-    else
-      item.state = "failed"
-      item.error = opts.error or opts.reason or "Turn did not finish normally"
-      self.paused = true
-      self.paused_reason = opts.reason or "error"
-    end
-  elseif opts.error or (opts.reason and opts.reason ~= "end_turn") then
+  if item and item.state ~= "sent" then
+    item.state = "failed"
+    item.error = opts.error or opts.reason or "Turn did not finish normally"
+    self.paused = true
+    self.paused_reason = opts.reason or "error"
+  end
+  if opts.error or (opts.reason and opts.reason ~= "end_turn") then
     self.paused = true
     self.paused_reason = opts.reason or "error"
   end

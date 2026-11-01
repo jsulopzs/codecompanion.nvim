@@ -321,6 +321,9 @@ function ACPHandler:bind_updates(prompt)
       self:handle_permission_request(request)
     end)
     :on_complete(function(stop_reason)
+      if self.chat.queue then
+        self.chat.queue:mark_accepted()
+      end
       self.chat._acp_stop_reason = stop_reason or "end_turn"
       self:handle_complete()
     end)
