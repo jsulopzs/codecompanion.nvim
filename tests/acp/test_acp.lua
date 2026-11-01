@@ -968,4 +968,30 @@ T["ACP Responses"]["error response notifies active prompt"] = function()
   h.eq(result.error_message, "LLM provider error: quota exceeded")
 end
 
+T["ACP Steering"] = new_set()
+
+T["ACP Steering"]["uses steering only when initialize announces support"] = function()
+  local result = child.lua([[
+    local connection = create_test_connection()
+    local before = connection:can_steer()
+    connection._agent_info = { _meta = { steering = { supported = true } } }
+    local announced = connection:can_steer()
+    local request
+    function connection:send_rpc_request(method, params)
+      request = { method = method, params = params }
+      return { accepted = true }
+    end
+    local accepted
+    connection:steer({ session_id = "session-1", prompt = { { type = "text", text = "change course" } }, callback = function(ok) accepted = ok end })
+    vim.wait(100, function() return accepted ~= nil end)
+    return { before = before, announced = announced, accepted = accepted, request = request }
+  ]])
+  h.is_false(result.before)
+  h.is_true(result.announced)
+  h.is_true(result.accepted)
+  h.eq("_session/steering", result.request.method)
+  h.eq("session-1", result.request.params.sessionId)
+  h.eq("change course", result.request.params.prompt[1].text)
+end
+
 return T

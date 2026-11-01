@@ -727,6 +727,27 @@ function Connection:send_rpc_request(method, params)
   return self:wait_for_rpc_response(id)
 end
 
+---@return boolean
+function Connection:can_steer()
+  return self._agent_info ~= nil
+    and self._agent_info._meta ~= nil
+    and self._agent_info._meta.steering ~= nil
+    and self._agent_info._meta.steering.supported == true
+end
+
+---@param opts { session_id: string, prompt: table[], callback: fun(accepted: boolean) }
+---@return boolean
+function Connection:steer(opts)
+  if not self:can_steer() then
+    return false
+  end
+  async.sync(function()
+    local response = self:send_rpc_request("_session/steering", { sessionId = opts.session_id, prompt = opts.prompt })
+    opts.callback(response ~= nil)
+  end)()
+  return true
+end
+
 ---Send a result response to the ACP process
 ---@param id number
 ---@param result table
@@ -913,6 +934,9 @@ function Connection:_start_autonomous_turn(opts)
       self:cancel_autonomous_turn()
     end,
   }
+  if chat.composer then
+    chat.composer:update_status()
+  end
   handler:start_autonomous_turn({ session_id = opts.session_id, cause = opts.cause })
   return turn
 end
