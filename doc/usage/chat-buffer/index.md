@@ -186,7 +186,7 @@ Press `?` in a chat buffer to list every keymap. The defaults in normal mode are
 
 In insert mode, `<C-s>` sends the message, `<C-c>` closes the chat buffer and `<C-_>` opens the completion menu. To change any of them, see [Keymaps](/configuration/chat-buffer#keymaps).
 
-## ACP Composer and Queue
+## ACP Composer, Queue and Background Tasks
 
 ACP chats open an editable composer below the read-only history. Press `i`, `a` or `o` in the history to focus it. The composer grows from three to 10 lines as you write. Completion for slash commands and editor context uses the same `codecompanion_input` buffer type as other CodeCompanion inputs.
 
@@ -195,7 +195,7 @@ ACP chats open an editable composer below the read-only history. Press `i`, `a` 
 | `<C-s>` in insert mode or `<CR>` in normal mode | Send now, or correct the active turn if the agent supports steering |
 | `<M-CR>` | Add the prompt to the queue; if the agent is idle and the queue is empty, send it now |
 | `gp` in normal mode | Park the prompt without sending it |
-| `gQ` in normal mode | Open the queue manager |
+| `gQ` in normal mode | Open the queue, tasks and schedules manager |
 | `q` in normal mode | Stop the active turn and pause the queue |
 
 Queued prompts leave in arrival order after the agent ends its turn. A prompt leaves the queue as soon as the agent accepts it, even if the turn later stops or fails. The manager shows pending and parked prompts. Use `<CR>` to send one now, `e` to edit, `dd` to remove, `K` or `J` to move, `P` to move to the front, `p` to switch between parked and queued and `r` to resume a paused queue. A prompt that fails before the agent accepts it stays in the queue for review. `/rewind` and `/resume` must run immediately and cannot be queued.
@@ -203,6 +203,12 @@ Queued prompts leave in arrival order after the agent ends its turn. A prompt le
 When a queued prompt is sent, `#buffer` and other configured editor context names expand, and `/file <path>` attaches an existing file. Other CodeCompanion slash commands are sent as text; CodeCompanion warns when you queue one. Run commands that open a picker directly before queuing the resulting prompt.
 
 The queue is saved per ACP session in Neovim's state directory. Closing the chat pauses it. Reopening the session restores its prompts and parked ideas. Rewind and fork carry the queue to the new session in a paused state.
+
+Background shells, workflows and monitors appear below the chat history while they run. A finished task leaves its result there until you send the next prompt. Schedules appear below tasks and above queued prompts. The composer hint shows active task and schedule counts.
+
+In `gQ`, move to a task and press `<CR>` to open its output, `s` to confirm stopping it or `gd` to jump to its tool call. Output refreshes while the task runs when the agent provides an output RPC or an output file. A task without either source has no output to open. Move to a schedule and press `x` to queue a request for the agent to cancel it. The schedule remains visible until the agent sends an updated list.
+
+Tasks belong to the running agent process and clear when the ACP session changes. Schedules and monitors appear only when the agent announces support for them. Configure the task area with `interactions.chat.tasks.enabled` (default `true`) and its output refresh interval with `interactions.chat.tasks.refresh_ms` (default `2000`, in milliseconds).
 
 ## Multiple Chats
 

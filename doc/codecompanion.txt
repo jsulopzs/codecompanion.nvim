@@ -3622,7 +3622,7 @@ In insert mode, `<C-s>` sends the message, `<C-c>` closes the chat buffer and
 |codecompanion-configuration-chat-buffer-keymaps|.
 
 
-ACP COMPOSER AND QUEUE ~
+ACP COMPOSER, QUEUE AND BACKGROUND TASKS ~
 
 ACP chats open an editable composer below the read-only history. Press `i`, `a`
 or `o` in the history to focus it. The composer grows from three to 10 lines as
@@ -3641,7 +3641,8 @@ you write. Completion for slash commands and editor context uses the same
 
   gp in normal mode                   Park the prompt without sending it
 
-  gQ in normal mode                   Open the queue manager
+  gQ in normal mode                   Open the queue, tasks and schedules
+                                      manager
 
   q in normal mode                    Stop the active turn and pause the
                                       queue
@@ -3662,6 +3663,24 @@ commands that open a picker directly before queuing the resulting prompt.
 The queue is saved per ACP session in Neovim's state directory. Closing the
 chat pauses it. Reopening the session restores its prompts and parked ideas.
 Rewind and fork carry the queue to the new session in a paused state.
+
+Background shells, workflows and monitors appear below the chat history while
+they run. A finished task leaves its result there until you send the next
+prompt. Schedules appear below tasks and above queued prompts. The composer
+hint shows active task and schedule counts.
+
+In `gQ`, move to a task and press `<CR>` to open its output, `s` to confirm
+stopping it or `gd` to jump to its tool call. Output refreshes while the task
+runs when the agent provides an output RPC or an output file. A task without
+either source has no output to open. Move to a schedule and press `x` to queue
+a request for the agent to cancel it. The schedule remains visible until the
+agent sends an updated list.
+
+Tasks belong to the running agent process and clear when the ACP session
+changes. Schedules and monitors appear only when the agent announces support
+for them. Configure the task area with `interactions.chat.tasks.enabled`
+(default `true`) and its output refresh interval with
+`interactions.chat.tasks.refresh_ms` (default `2000`, in milliseconds).
 
 
 MULTIPLE CHATS ~
@@ -14665,8 +14684,10 @@ LIST OF EVENTS ~
 
   CodeCompanionChatModel              After the model is set
 
-  CodeCompanionChatTitle              After the chat’s title is set, with the
-                                      `title` in the payload
+  CodeCompanionChatTitle              After the chat's title is set (for
+                                      example, by an ACP agent naming its
+                                      session), with the title in the
+                                      payload
 
   CodeCompanionChatToolAdded          After a tool is added, with the
                                       tool in the payload
