@@ -20,6 +20,15 @@ local _history = {} ---@type string[]
 local _history_index = 0
 local _draft = ""
 
+---Apply the completion settings shared by input buffers
+---@param bufnr number
+function M.configure_buffer(bufnr)
+  vim.bo[bufnr].filetype = "codecompanion_input"
+  if config.interactions.chat.opts.completion_provider == "default" then
+    vim.bo[bufnr].omnifunc = "v:lua.require'codecompanion.providers.completion.default.omnifunc'.omnifunc"
+  end
+end
+
 ---Show the input window as a float
 ---@param opts { title?: string, window?: table }
 ---@return number winnr
@@ -203,10 +212,7 @@ function M.open(opts)
   api.nvim_buf_set_name(bufnr, string.format("[CodeCompanion Input] %d", bufnr))
   vim.bo[bufnr].buftype = "acwrite"
 
-  local completion_provider = config.interactions.chat.opts.completion_provider
-  if completion_provider == "default" then
-    vim.bo[bufnr].omnifunc = "v:lua.require'codecompanion.providers.completion.default.omnifunc'.omnifunc"
-  end
+  M.configure_buffer(bufnr)
 
   _input = {
     allow_empty = opts.allow_empty,

@@ -9,7 +9,7 @@ function source.new(config)
 end
 
 function source:is_available()
-  return vim.bo.filetype == "codecompanion"
+  return vim.bo.filetype == "codecompanion" or vim.b.codecompanion_chat_bufnr ~= nil
 end
 
 function source:get_trigger_characters()
@@ -44,7 +44,7 @@ end
 ---@return nil
 function source:execute(item, callback)
   vim.api.nvim_set_current_line("")
-  local chat = require("codecompanion").buf_get_chat(item.context.bufnr)
+  local chat = completion.chat(item.context.bufnr)
 
   require("codecompanion.interactions.chat.slash_commands").run(item, chat)
 

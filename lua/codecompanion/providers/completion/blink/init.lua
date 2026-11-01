@@ -207,7 +207,7 @@ function M:execute(ctx, item, callback, default_implementation)
       slash_commands.insert_path(ctx.bufnr, paths)
     end)
   else
-    local chat = require("codecompanion").buf_get_chat(ctx.bufnr)
+    local chat = completion.chat(ctx.bufnr)
     slash_commands.run(item, chat)
   end
 

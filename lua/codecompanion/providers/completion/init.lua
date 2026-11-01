@@ -43,6 +43,19 @@ local M = {}
 -- Cache adapter info per buffer (type + evaluated tools)
 local adapter_cache = {}
 
+---@param bufnr? number
+---@return number
+local function chat_bufnr(bufnr)
+  bufnr = bufnr or api.nvim_get_current_buf()
+  return vim.b[bufnr].codecompanion_chat_bufnr or bufnr
+end
+
+---@param bufnr? number
+---@return CodeCompanion.Chat|nil
+function M.chat(bufnr)
+  return require("codecompanion").buf_get_chat(chat_bufnr(bufnr))
+end
+
 local aug = api.nvim_create_augroup("codecompanion.completion", { clear = true })
 
 -- Listen to both ChatAdapter and ChatModel events to keep cache in sync
@@ -93,7 +106,7 @@ function M.slash_commands(interaction)
   interaction = interaction or M.interaction_type()
 
   local bufnr = api.nvim_get_current_buf()
-  local adapter_info = adapter_cache[bufnr]
+  local adapter_info = adapter_cache[chat_bufnr(bufnr)]
 
   local filtered_slash_commands = slash_command_filter.filter_enabled_slash_commands(
     config.interactions.chat.slash_commands,
@@ -177,13 +190,13 @@ function M.acp_commands(bufnr)
   bufnr = bufnr or api.nvim_get_current_buf()
 
   -- Only show ACP commands if this buffer is using an ACP adapter
-  local adapter_info = adapter_cache[bufnr]
+  local adapter_info = adapter_cache[chat_bufnr(bufnr)]
   if not adapter_info or adapter_info.type ~= "acp" then
     return {}
   end
 
   local acp_commands = require("codecompanion.interactions.chat.acp.commands")
-  local commands = acp_commands.get_commands_for_buffer(bufnr)
+  local commands = acp_commands.get_commands_for_buffer(chat_bufnr(bufnr))
 
   return vim
     .iter(commands)
@@ -207,7 +220,7 @@ end
 ---@return table
 function M.tools()
   local bufnr = api.nvim_get_current_buf()
-  local adapter_info = adapter_cache[bufnr]
+  local adapter_info = adapter_cache[chat_bufnr(bufnr)]
 
   -- Only show tools for HTTP adapters
   if not adapter_info or adapter_info.type == "acp" then
@@ -261,6 +274,9 @@ end
 ---Determine the interaction type from the current buffer's filetype
 ---@return string "chat"|"cli"
 function M.interaction_type()
+  if vim.b.codecompanion_chat_bufnr then
+    return "chat"
+  end
   if vim.bo.filetype == "codecompanion_input" then
     return "cli"
   end

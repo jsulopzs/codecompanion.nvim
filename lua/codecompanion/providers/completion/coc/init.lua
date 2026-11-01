@@ -152,7 +152,7 @@ function M.execute(opt)
       slash_commands.insert_path(bufnr, paths)
     end)
   else
-    local chat = require("codecompanion").buf_get_chat(bufnr)
+    local chat = completion.chat(bufnr)
     slash_commands.run(opt, chat)
   end
 end
