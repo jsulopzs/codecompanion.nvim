@@ -120,6 +120,7 @@ local defaults = {
         keymaps = { send = "<C-s>", queue = "<M-CR>", park = "gp", manager = "gQ" },
       },
       queue = { save = true },
+      tasks = { enabled = true, refresh_ms = 2000 },
       roles = {
         ---The header name for the LLM's messages
         ---@type string|fun(adapter: CodeCompanion.HTTPAdapter|CodeCompanion.ACPAdapter): string

@@ -697,6 +697,9 @@ function Chat.new(args)
 
   if self.adapter.type == "acp" and config.interactions.chat.composer.enabled then
     self.queue = require("codecompanion.interactions.chat.queue").new(self)
+    if config.interactions.chat.tasks.enabled then
+      self.tasks = require("codecompanion.interactions.chat.tasks").new(self)
+    end
     self.composer = require("codecompanion.interactions.chat.composer").new(self)
     local function map_history(key, callback)
       vim.keymap.set("n", key, callback, { buffer = self.bufnr, silent = true })
@@ -734,6 +737,9 @@ function Chat.new(args)
       callback = function(event)
         if self.acp_connection and self.acp_connection.session_id == event.data.session_id then
           self.queue:attach(event.data.session_id)
+          if self.tasks then
+            self.tasks:attach(event.data.session_id)
+          end
         end
       end,
     })
@@ -752,6 +758,9 @@ function Chat.new(args)
       callback = function(event)
         if event.data.bufnr == self.bufnr then
           self.queue:attach(event.data.session_id)
+          if self.tasks then
+            self.tasks:attach(event.data.session_id, { reset = event.match == "CodeCompanionACPChatRewound" })
+          end
         end
       end,
     })
@@ -762,6 +771,9 @@ function Chat.new(args)
     self.composer:open()
     if self.acp_connection and self.acp_connection.session_id then
       self.queue:attach(self.acp_connection.session_id)
+      if self.tasks then
+        self.tasks:attach(self.acp_connection.session_id)
+      end
     end
   end
 
@@ -1556,6 +1568,9 @@ function Chat:submit(opts)
   log:info("Chat request started")
 
   self:dispatch("on_submitted", { payload = payload })
+  if self.tasks then
+    self.tasks:clear_finished()
+  end
 
   if self.adapter.type == "http" then
     self:_submit_http(payload)
