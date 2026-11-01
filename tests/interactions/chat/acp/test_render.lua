@@ -36,11 +36,12 @@ T["restore_session"]["ends on a user header the user can type into"] = function(
       if line:match("^## ") then last_header = line end
     end
     local user = require("codecompanion.config").interactions.chat.roles.user
-    return { last_header = last_header, user_header = "## " .. (type(user) == "function" and user() or user), modifiable = vim.bo[chat.bufnr].modifiable }
+    return { last_header = last_header, user_header = "## " .. (type(user) == "function" and user() or user), history_modifiable = vim.bo[chat.bufnr].modifiable, composer_modifiable = vim.bo[chat.composer.bufnr].modifiable }
   ]])
 
   h.eq(result.user_header, result.last_header)
-  h.eq(true, result.modifiable)
+  h.eq(false, result.history_modifiable)
+  h.eq(true, result.composer_modifiable)
 end
 
 return T

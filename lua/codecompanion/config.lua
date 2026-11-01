@@ -112,6 +112,14 @@ local defaults = {
     -- CHAT INTERACTION -------------------------------------------------------
     chat = {
       adapter = "copilot",
+      composer = {
+        enabled = true,
+        min_height = 3,
+        max_height = 10,
+        write_in_history = false,
+        keymaps = { send = "<C-s>", queue = "<M-CR>", park = "gp", manager = "gQ" },
+      },
+      queue = { save = true },
       roles = {
         ---The header name for the LLM's messages
         ---@type string|fun(adapter: CodeCompanion.HTTPAdapter|CodeCompanion.ACPAdapter): string

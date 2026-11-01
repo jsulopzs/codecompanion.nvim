@@ -133,12 +133,12 @@ end
 T["ACPHandler"]["keeps a user draft after an autonomous turn"] = function()
   local result = child.lua([[
     local chat, connection = autonomous_chat()
-    vim.api.nvim_buf_set_lines(chat.bufnr, chat.header_line, -1, false, { "Unsent draft" })
+    vim.api.nvim_buf_set_lines(chat.composer.bufnr, 0, -1, false, { "Unsent draft" })
     autonomous_update(connection, { sessionUpdate = "async_task_spawned", taskType = "turn", asyncTaskId = "turn-3" })
     autonomous_update(connection, { sessionUpdate = "agent_message_chunk", content = { type = "text", text = "Agent reply" } })
     autonomous_update(connection, { sessionUpdate = "async_task_state_update", asyncTaskId = "turn-3", state = "completed" })
     local text = table.concat(vim.api.nvim_buf_get_lines(chat.bufnr, 0, -1, false), "\n")
-    return { text = text, header_line = chat.header_line, draft = vim.api.nvim_buf_get_lines(chat.bufnr, chat.header_line, -1, false)[1] }
+    return { text = text, draft = vim.api.nvim_buf_get_lines(chat.composer.bufnr, 0, -1, false)[1] }
   ]])
   h.is_true(result.text:find("Agent reply", 1, true) ~= nil)
   h.eq("Unsent draft", result.draft)

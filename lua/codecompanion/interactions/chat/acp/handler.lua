@@ -23,7 +23,7 @@ local ACPHandler = {}
 ---@param opts { session_id: string, cause?: string }
 function ACPHandler:start_autonomous_turn(opts)
   local chat = self.chat
-  if chat._last_role == config.constants.USER_ROLE then
+  if not chat.composer and chat._last_role == config.constants.USER_ROLE then
     self._draft = vim.api.nvim_buf_get_lines(chat.bufnr, chat.header_line, -1, false)
     vim.api.nvim_buf_set_lines(
       chat.bufnr,
@@ -54,6 +54,7 @@ end
 ---Finish an autonomous turn and restore the user's draft
 ---@param opts { session_id: string, cause?: string, stopped?: boolean }
 function ACPHandler:finish_autonomous_turn(opts)
+  self.chat._acp_stop_reason = opts.stopped and "canceled" or "end_turn"
   self:handle_complete({ status = opts.stopped and "stopped" or nil })
   if self._draft and vim.api.nvim_buf_is_valid(self.chat.bufnr) then
     vim.api.nvim_buf_set_lines(self.chat.bufnr, self.chat.header_line, -1, false, self._draft)
@@ -127,6 +128,9 @@ function ACPHandler:submit(payload)
 
   -- IMPORTANT: Registered before the connect below, so a second <CR> can't start a parallel submit
   self.chat.current_request = request
+  if self.chat.composer then
+    self.chat.composer:update_status()
+  end
 
   -- Keep the agent's request off the main loop
   async.sync(function()
@@ -316,7 +320,8 @@ function ACPHandler:bind_updates(prompt)
     :on_elicitation_request(function(request)
       self:handle_permission_request(request)
     end)
-    :on_complete(function()
+    :on_complete(function(stop_reason)
+      self.chat._acp_stop_reason = stop_reason or "end_turn"
       self:handle_complete()
     end)
     :on_error(function(error)
@@ -575,6 +580,7 @@ end
 ---@param error string
 ---@return nil
 function ACPHandler:handle_error(error)
+  self.chat._acp_stop_reason = "error"
   self:_clear_permission_queue()
 
   self.chat.status = "error"

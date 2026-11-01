@@ -49,7 +49,7 @@ T["rewind"]["forks before the chosen turn and puts its prompt back"] = function(
   local result = child.lua([[
     local chat, conn = rewind_chat(function(at) return { { prompt = "first", agent_message_id = "m1" }, { prompt = "second", agent_message_id = at } } end)
     local ok = require("codecompanion.interactions.chat.acp.rewind").to(chat, 3)
-    return { ok = ok, loads = _G.loads, session = conn.session_id, tail = buffer_tail(chat, 2) }
+    return { ok = ok, loads = _G.loads, session = conn.session_id, tail = vim.api.nvim_buf_get_lines(chat.composer.bufnr, 0, -1, false) }
   ]])
 
   h.eq(true, result.ok)
@@ -105,7 +105,7 @@ T["rewind"]["rewinding to the first turn starts a new session"] = function()
     local new_session = false
     conn.ensure_session = function(self) self.session_id = "fresh"; new_session = true; return true end
     local ok = require("codecompanion.interactions.chat.acp.rewind").to(chat, 1)
-    return { ok = ok, new_session = new_session, loads = #_G.loads, session = conn.session_id, tail = buffer_tail(chat, 1) }
+    return { ok = ok, new_session = new_session, loads = #_G.loads, session = conn.session_id, tail = vim.api.nvim_buf_get_lines(chat.composer.bufnr, 0, -1, false) }
   ]])
 
   h.eq(true, result.ok)

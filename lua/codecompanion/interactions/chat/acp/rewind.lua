@@ -25,6 +25,11 @@ end
 ---@param prompt string
 ---@return nil
 local function refill(chat, prompt)
+  if chat.composer then
+    vim.api.nvim_buf_set_lines(chat.composer.bufnr, 0, -1, false, vim.split(prompt, "\n", { plain = true }))
+    chat.composer:update_height()
+    return
+  end
   -- The restored history is still queued in the builder, so write it out before the prompt goes after it
   chat.builder:flush()
   local lines = vim.split(prompt, "\n", { plain = true })

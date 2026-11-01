@@ -695,6 +695,67 @@ function Chat.new(args)
 
   init_keymaps(self)
 
+  if self.adapter.type == "acp" and config.interactions.chat.composer.enabled then
+    self.queue = require("codecompanion.interactions.chat.queue").new(self)
+    self.composer = require("codecompanion.interactions.chat.composer").new(self)
+    local function map_history(key, callback)
+      vim.keymap.set("n", key, callback, { buffer = self.bufnr, silent = true })
+    end
+    for _, key in ipairs({ "i", "a", "o" }) do
+      map_history(key, function()
+        self.composer:focus()
+      end)
+    end
+    map_history("gQ", function()
+      require("codecompanion.interactions.chat.queue.view").open(self.queue)
+    end)
+    local group = api.nvim_create_augroup("codecompanion.composer." .. self.bufnr, { clear = true })
+    api.nvim_create_autocmd("User", {
+      group = group,
+      pattern = "CodeCompanionChatOpened",
+      callback = function(event)
+        if event.data.bufnr == self.bufnr then
+          self.composer:open()
+        end
+      end,
+    })
+    api.nvim_create_autocmd("User", {
+      group = group,
+      pattern = "CodeCompanionChatHidden",
+      callback = function(event)
+        if event.data.bufnr == self.bufnr then
+          self.composer:hide()
+        end
+      end,
+    })
+    api.nvim_create_autocmd("User", {
+      group = group,
+      pattern = "CodeCompanionACPSessionPost",
+      callback = function(event)
+        if self.acp_connection and self.acp_connection.session_id == event.data.session_id then
+          self.queue:attach(event.data.session_id)
+        end
+      end,
+    })
+    api.nvim_create_autocmd("User", {
+      group = group,
+      pattern = { "CodeCompanionACPChatRestored", "CodeCompanionACPChatRewound" },
+      callback = function(event)
+        if event.data.bufnr == self.bufnr then
+          self.queue:attach(event.data.session_id)
+        end
+      end,
+    })
+    self:add_callback("on_closed", function()
+      self.composer:close()
+      pcall(api.nvim_del_augroup_by_id, group)
+    end)
+    self.composer:open()
+    if self.acp_connection and self.acp_connection.session_id then
+      self.queue:attach(self.acp_connection.session_id)
+    end
+  end
+
   self:set_system_prompt()
   set_autocmds(self)
 
@@ -1496,6 +1557,77 @@ function Chat:submit(opts)
   utils.fire("ChatSubmitted", { bufnr = self.bufnr, id = self.id, type = self.adapter.type })
 end
 
+---@param text string
+---@return boolean
+function Chat:send_text(text)
+  if self.current_request or vim.trim(text) == "" then
+    return false
+  end
+  local expanded = require("codecompanion.interactions.chat.queue.dispatcher").expand({ chat = self, text = text })
+  if not expanded then
+    utils.notify("A file in the prompt could not be found", vim.log.levels.WARN)
+    return false
+  end
+  local lines = vim.split(expanded, "\n", { plain = true })
+  self.ui:unlock_buf()
+  api.nvim_buf_set_lines(self.bufnr, self.header_line, -1, false, lines)
+  self:submit()
+  if self.composer and not config.interactions.chat.composer.write_in_history then
+    self.ui:lock_buf()
+    self.composer:update_status()
+  end
+  return self.current_request ~= nil
+end
+
+---@param text string
+---@param callback? fun(accepted: boolean)
+---@return boolean
+function Chat:send_now(text, callback)
+  if not self.current_request then
+    if self.queue and self.queue.paused then
+      self.queue.paused = false
+      self.queue:_changed()
+    end
+    return self:send_text(text)
+  end
+  local connection = self.acp_connection
+  if connection and connection:can_steer() and connection.session_id then
+    return connection:steer({
+      session_id = connection.session_id,
+      prompt = { { type = "text", text = text } },
+      callback = function(ok)
+        if ok then
+          self:add_buf_message({ role = config.constants.USER_ROLE, content = "Correction: " .. text })
+          self:add_message(
+            { role = config.constants.USER_ROLE, content = text },
+            { visible = false, _meta = { sent = true, correction = true } }
+          )
+          if callback then
+            callback(true)
+          end
+        else
+          if callback then
+            callback(false)
+          else
+            self.queue:add({ text = text })
+          end
+          utils.notify("Correction failed; prompt added to queue", vim.log.levels.WARN)
+        end
+      end,
+    })
+  end
+  if self.queue then
+    if callback then
+      callback(false)
+    else
+      self.queue:add({ text = text })
+    end
+    utils.notify("Agent cannot accept corrections; prompt added to queue", vim.log.levels.WARN)
+    return true
+  end
+  return false
+end
+
 ---Method to fire when all the tools are done
 ---@param opts? table
 ---@return nil
@@ -1627,6 +1759,14 @@ function Chat:finish(opts)
   -- Captured first as `ready_for_input` resets the status to an empty string
   local status = self.status
   self:ready_for_input()
+
+  if self.queue and self.adapter.type == "acp" then
+    self.queue:turn_finished({
+      reason = self._acp_stop_reason,
+      error = opts.error or (status == "error" and "Agent error" or nil),
+    })
+    self._acp_stop_reason = nil
+  end
 
   self:dispatch("on_completed", { status = status, error = opts.error })
   utils.fire("ChatDone", { bufnr = self.bufnr, id = self.id })
@@ -1788,6 +1928,9 @@ end
 ---Stop streaming the response from the LLM
 ---@return nil
 function Chat:stop()
+  if self.queue then
+    self.queue:pause("cancelled")
+  end
   self.status = CONSTANTS.STATUS_CANCELLING
   self:dispatch("on_cancelled")
   utils.fire("ChatStopped", { bufnr = self.bufnr, id = self.id })
@@ -1833,6 +1976,9 @@ end
 ---Close the current chat buffer and clean up any resources
 ---@return nil
 function Chat:close()
+  if self.queue then
+    self.queue:pause("closed")
+  end
   if self.current_request then
     self:stop()
   end
@@ -1998,7 +2144,11 @@ end
 ---@return nil
 function Chat:reset()
   self.status = ""
-  self.ui:unlock_buf()
+  if self.composer and not config.interactions.chat.composer.write_in_history then
+    self.ui:lock_buf()
+  else
+    self.ui:unlock_buf()
+  end
 end
 
 ---Restore the chat buffer to an editable state (used when a submission is prevented)
