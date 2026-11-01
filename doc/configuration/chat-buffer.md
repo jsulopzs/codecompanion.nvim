@@ -44,6 +44,29 @@ require("codecompanion").setup({
 })
 ```
 
+## ACP Composer and Queue
+
+ACP chats use a separate composer by default. Configure its size, keys and queue persistence with:
+
+```lua
+require("codecompanion").setup({
+  interactions = {
+    chat = {
+      composer = {
+        enabled = true,
+        min_height = 3,
+        max_height = 10,
+        write_in_history = false,
+        keymaps = { send = "<C-s>", queue = "<M-CR>", park = "gp", manager = "gQ" },
+      },
+      queue = { save = true },
+    },
+  },
+})
+```
+
+Set `write_in_history = true` to allow editing the history buffer alongside the composer. Set `enabled = false` to use the original single-buffer chat. Queue and steering are available with the composer enabled.
+
 ## Completion
 
 CodeCompanion uses [blink.cmp](https://github.com/saghen/blink.cmp), [nvim-cmp](https://github.com/hrsh7th/nvim-cmp) or [coc.nvim](https://github.com/neoclide/coc.nvim), in that order, if one is installed. Otherwise, it falls back to Neovim's native completion. You can override this with:

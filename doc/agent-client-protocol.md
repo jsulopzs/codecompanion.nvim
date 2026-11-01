@@ -84,6 +84,12 @@ If the session can't be loaded or forked, the chat starts a new one.
 
 Some agents continue working after a prompt has ended. Claude Code can resume when a background command finishes, a scheduled wakeup fires or a cron task runs. CodeCompanion shows those updates as a new agent turn, keeps the chat busy until it ends and preserves any unsent text below a new user header. Press `q` to cancel the turn.
 
+With the ACP composer enabled, unsent text stays in the composer while an autonomous turn runs. The next queued prompt leaves only after that turn finishes.
+
+### Steering
+
+If `initialize._meta.steering.supported` is `true`, sending from the composer during an active turn calls `_session/steering` with the current session ID and a text content block. The correction appears in the history where it arrived. Agents without this extension receive the prompt through the queue after the active turn ends.
+
 CodeCompanion advertises the JetBrains AIR `asyncTasks` capability through `clientCapabilities._meta.jetbrains.air`. Claude Code uses this non-standard extension to mark the start and end of an autonomous turn and to report its cause. If an agent sends content without these marks, CodeCompanion closes the turn after a configurable idle period. The extension can be removed when ACP v2 supports updates outside a prompt. Codex does not currently send autonomous turns.
 
 ### Cleanup

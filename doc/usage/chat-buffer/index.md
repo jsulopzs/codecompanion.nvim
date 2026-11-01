@@ -186,6 +186,22 @@ Press `?` in a chat buffer to list every keymap. The defaults in normal mode are
 
 In insert mode, `<C-s>` sends the message, `<C-c>` closes the chat buffer and `<C-_>` opens the completion menu. To change any of them, see [Keymaps](/configuration/chat-buffer#keymaps).
 
+## ACP Composer and Queue
+
+ACP chats open an editable composer below the read-only history. Press `i`, `a` or `o` in the history to focus it. The composer grows from three to 10 lines as you write. Completion for slash commands and editor context uses the same `codecompanion_input` buffer type as other CodeCompanion inputs.
+
+| Key | Action |
+|---|---|
+| `<C-s>` in insert mode or `<CR>` in normal mode | Send now, or correct the active turn if the agent supports steering |
+| `<M-CR>` | Add the prompt to the queue; if the agent is idle and the queue is empty, send it now |
+| `gp` in normal mode | Park the prompt without sending it |
+| `gQ` in normal mode | Open the queue manager |
+| `q` in normal mode | Stop the active turn and pause the queue |
+
+Queued prompts leave in arrival order after the agent ends its turn. The manager shows pending and parked prompts. Use `<CR>` to send one now, `e` to edit, `dd` to remove, `K` or `J` to move, `P` to move to the front, `p` to switch between parked and queued and `r` to resume a paused queue. A failed prompt stays in the queue for review. `/rewind` and `/resume` must run immediately and cannot be queued.
+
+The queue is saved per ACP session in Neovim's state directory. Closing the chat pauses it. Reopening the session restores its prompts and parked ideas. Rewind and fork carry the queue to the new session in a paused state.
+
 ## Multiple Chats
 
 Open as many chat buffers as you like. Cycle through them with `{` and `}`, and use `:CodeCompanionChat Toggle` to show or hide the last one.

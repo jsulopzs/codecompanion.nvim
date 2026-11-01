@@ -1,4 +1,4 @@
-*codecompanion.txt*         For NVIM v0.12        Last change: 2026 October 30
+*codecompanion.txt*        For NVIM v0.12        Last change: 2026 November 01
 
 ==============================================================================
 Table of Contents                            *codecompanion-table-of-contents*
@@ -3608,6 +3608,9 @@ are:
   K                       tool_call_details        Show the tool call
                                                    under the cursor
 
+  gu                      rewind                   Rewind to an earlier
+                                                   message
+
   } {                     next_chat previous_chat  Move to the next or
                                                    previous chat
 
@@ -3617,6 +3620,42 @@ are:
 In insert mode, `<C-s>` sends the message, `<C-c>` closes the chat buffer and
 `<C-_>` opens the completion menu. To change any of them, see
 |codecompanion-configuration-chat-buffer-keymaps|.
+
+
+ACP COMPOSER AND QUEUE ~
+
+ACP chats open an editable composer below the read-only history. Press `i`, `a`
+or `o` in the history to focus it. The composer grows from three to 10 lines as
+you write. Completion for slash commands and editor context uses the same
+`codecompanion_input` buffer type as other CodeCompanion inputs.
+
+  -----------------------------------------------------------------------
+  Key                                 Action
+  ----------------------------------- -----------------------------------
+  <C-s> in insert mode or <CR> in     Send now, or correct the active
+  normal mode                         turn if the agent supports steering
+
+  <M-CR>                              Add the prompt to the queue; if the
+                                      agent is idle and the queue is
+                                      empty, send it now
+
+  gp in normal mode                   Park the prompt without sending it
+
+  gQ in normal mode                   Open the queue manager
+
+  q in normal mode                    Stop the active turn and pause the
+                                      queue
+  -----------------------------------------------------------------------
+Queued prompts leave in arrival order after the agent ends its turn. The
+manager shows pending and parked prompts. Use `<CR>` to send one now, `e` to
+edit, `dd` to remove, `K` or `J` to move, `P` to move to the front, `p` to
+switch between parked and queued and `r` to resume a paused queue. A failed
+prompt stays in the queue for review. `/rewind` and `/resume` must run
+immediately and cannot be queued.
+
+The queue is saved per ACP session in Neovim's state directory. Closing the
+chat pauses it. Reopening the session restores its prompts and parked ideas.
+Rewind and fork carry the queue to the new session in a paused state.
 
 
 MULTIPLE CHATS ~
@@ -4918,6 +4957,8 @@ Slash commands add context to the chat buffer and act on the chat itself. Type
 
   -resume                             Restore a previous session
 
+  -rewind                             Rewind to an earlier message
+
   -rules                              Add a rules group
 
   -save                               Save the chat as a session
@@ -5183,6 +5224,33 @@ The `rules` slash command adds a |codecompanion-usage-chat-buffer-rules| group
 to the chat buffer. It's also available in the
 |codecompanion-usage-cli-slash-commands|.
 
+
+/REWIND ~
+
+The `rewind` slash command (or `gu` in the chat buffer) lists the messages
+you've sent, newest first. Pick one and the chat goes back to just before it:
+the conversation continues in a fork of the session cut after the reply that
+preceded it, and the message is put back in the chat buffer for you to edit and
+send again. The original session stays as it was. Rewinding to your first
+message starts a new session.
+
+It works with ACP agents that support `session/load` and `session/fork` and can
+fork at a message, such as Claude Code and Codex. If an agent forks without
+cutting, the chat stays on the original session and warns you.
+
+Rewinding can put your files back too. Before each prompt, the chat snapshots
+the working tree into git's object store, without touching your index, branch
+or stash. If files have changed since the message you pick, you're asked
+whether to restore them: files that changed or were deleted get their old
+content back, and files created since are removed. It sees every change on
+disk, whether the agent made it with an edit tool or a shell command, and your
+own edits too, so check the list before you accept.
+
+
+  [!NOTE] File checkpoints work inside a git repository and skip files git
+  ignores. They last as long as the chat: a resumed session has none for its
+  earlier messages. Turn them off with `interactions.chat.opts.file_checkpoints =
+  false`.
 
 /SAVE ~
 
@@ -7378,6 +7446,33 @@ To change these options:
       },
     })
 <
+
+
+ACP COMPOSER AND QUEUE ~
+
+ACP chats use a separate composer by default. Configure its size, keys and
+queue persistence with:
+
+>lua
+    require("codecompanion").setup({
+      interactions = {
+        chat = {
+          composer = {
+            enabled = true,
+            min_height = 3,
+            max_height = 10,
+            write_in_history = false,
+            keymaps = { send = "<C-s>", queue = "<M-CR>", park = "gp", manager = "gQ" },
+          },
+          queue = { save = true },
+        },
+      },
+    })
+<
+
+Set `write_in_history = true` to allow editing the history buffer alongside the
+composer. Set `enabled = false` to use the original single-buffer chat. Queue
+and steering are available with the composer enabled.
 
 
 COMPLETION ~
@@ -14601,9 +14696,14 @@ LIST OF EVENTS ~
                                            the connection, such as adding MCP
                                            servers
 
-  CodeCompanionACPSessionPost              After a session starts
+  CodeCompanionACPSessionPost              After a session starts or is loaded
 
   CodeCompanionACPChatRestored             After a session is restored
+
+  CodeCompanionACPChatRewound              After a chat is rewound to an
+                                           earlier message, with the new
+                                           session_id and the
+                                           source_session_id
 
   CodeCompanionACPCommandsUpdate           After an agent's commands are
                                            loaded, with the commands in the
@@ -14941,6 +15041,17 @@ If an agent supports `session/list` and `session/load`, the
 |codecompanion-usage-chat-buffer-slash-commands-resume| slash command lists its
 previous sessions and restores the one you pick into the chat buffer.
 
+To open a chat on a session from Lua, pass its ID to `acp_session_id`. If the
+agent also supports `session/fork`, pass it to `acp_fork_session_id` instead,
+and the chat continues in a new fork of that session, leaving the original
+untouched:
+
+>lua
+    require("codecompanion.interactions.chat").new({ adapter = "claude_code", acp_fork_session_id = "<session-id>" })
+<
+
+If the session can't be loaded or forked, the chat starts a new one.
+
 
 AUTONOMOUS TURNS
 
@@ -14949,6 +15060,19 @@ when a background command finishes, a scheduled wakeup fires or a cron task
 runs. CodeCompanion shows those updates as a new agent turn, keeps the chat
 busy until it ends and preserves any unsent text below a new user header. Press
 `q` to cancel the turn.
+
+With the ACP composer enabled, unsent text stays in the composer while an
+autonomous turn runs. The next queued prompt leaves only after that turn
+finishes.
+
+
+STEERING
+
+If `initialize._meta.steering.supported` is `true`, sending from the composer
+during an active turn calls `_session/steering` with the current session ID and
+a text content block. The correction appears in the history where it arrived.
+Agents without this extension receive the prompt through the queue after the
+active turn ends.
 
 CodeCompanion advertises the JetBrains AIR `asyncTasks` capability through
 `clientCapabilities._meta.jetbrains.air`. Claude Code uses this non-standard
