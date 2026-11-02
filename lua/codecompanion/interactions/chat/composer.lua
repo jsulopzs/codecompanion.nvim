@@ -176,18 +176,8 @@ function Composer:update_status()
       state = state .. string.format(" · %d scheduled", scheduled)
     end
   end
-  local hint = string.format(
-    "%s · %s %s · %s queue · %s park · %s manage · %s compact%s",
-    state,
-    keys.send,
-    busy and "correct" or "send",
-    keys.queue,
-    keys.park,
-    keys.manager,
-    keys.compact,
-    busy and " · q stop" or ""
-  )
-  local segments = { { hint, "Comment" } }
+  -- State and context usage first, so a narrow window cuts the key list rather than them
+  local segments = { { state, "Comment" } }
   local usage = self.chat.context_usage
   if usage and type(usage.size) == "number" and usage.size > 0 and type(usage.used) == "number" then
     local ratio = usage.used / usage.size
@@ -197,6 +187,19 @@ function Composer:update_status()
       group,
     })
   end
+  table.insert(segments, {
+    string.format(
+      " · %s %s · %s queue · %s park · %s manage · %s compact%s",
+      keys.send,
+      busy and "correct" or "send",
+      keys.queue,
+      keys.park,
+      keys.manager,
+      keys.compact,
+      busy and " · q stop" or ""
+    ),
+    "Comment",
+  })
   api.nvim_buf_clear_namespace(self.bufnr, ns, 0, -1)
   api.nvim_buf_set_extmark(self.bufnr, ns, api.nvim_buf_line_count(self.bufnr) - 1, 0, {
     virt_lines = { segments },

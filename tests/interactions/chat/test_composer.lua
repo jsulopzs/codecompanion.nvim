@@ -84,7 +84,8 @@ T["Composer"]["shows the keys under the text, whatever the statusline"] = functi
     local function hint()
       local marks = vim.api.nvim_buf_get_extmarks(chat.composer.bufnr, -1, 0, -1, { details = true })
       local mark = marks[#marks]
-      return { row = mark[2], text = mark[4].virt_lines[1][1][1] }
+      local text = table.concat(vim.tbl_map(function(segment) return segment[1] end, mark[4].virt_lines[1]))
+      return { row = mark[2], text = text }
     end
     local idle = hint()
     vim.api.nvim_buf_set_lines(chat.composer.bufnr, 0, -1, false, { "one", "two" })
@@ -137,13 +138,14 @@ T["Composer"]["shows context usage and updates it after a new usage report"] = f
     local after = segments()
     report(50000, nil)
     local without_size = segments()
-    return { before = #before, first = first[2], warned = warned[2], after = after[2], without_size = #without_size, tokens = chat.tokens, used = chat.context_usage.used }
+    return { before = #before, first = first[2], keys = first[3][1], warned = warned[2], after = after[2], without_size = #without_size, tokens = chat.tokens, used = chat.context_usage.used }
   ]])
-  h.eq(1, result.before)
+  h.eq(2, result.before)
   h.eq({ " · ctx 7% 71k/1M", "Comment" }, result.first)
+  h.is_true(vim.startswith(result.keys, " · <C-s> send"))
   h.eq({ " · ctx 85% 850k/1M", "WarningMsg" }, result.warned)
   h.eq({ " · ctx 12% 120k/1M", "Comment" }, result.after)
-  h.eq(1, result.without_size)
+  h.eq(2, result.without_size)
   h.eq(50000, result.tokens)
   h.eq(50000, result.used)
 end
