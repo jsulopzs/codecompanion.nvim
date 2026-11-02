@@ -1,5 +1,38 @@
 local M = {}
 
+local function compact_before(queue, item)
+  local threshold = require("codecompanion.config").interactions.chat.queue.compact_before
+  local usage = queue.chat.context_usage
+  if not threshold or item.compaction_requested or not usage or not usage.size or usage.size <= 0 then
+    return item
+  end
+  if usage.used / usage.size <= threshold then
+    return item
+  end
+  local commands = require("codecompanion.interactions.chat.acp.commands").get_commands_for_session(
+    queue.chat.acp_connection.session_id
+  )
+  local command = vim.iter(commands):find(function(available)
+    return available.name == "compact"
+  end)
+  if not command then
+    return item
+  end
+  item.compaction_requested = true
+  local compact = {
+    id = tostring(vim.uv.hrtime()),
+    session_id = queue.session_id,
+    kind = "pending",
+    state = "pending",
+    text = "/" .. command.name,
+    origin = "auto_compact",
+    created_at = os.time(),
+  }
+  table.insert(queue.items, item.position, compact)
+  queue:_changed()
+  return compact
+end
+
 ---@param text string
 ---@return string|nil
 function M.unexpanded_command(text)
@@ -47,6 +80,7 @@ function M.dispatch(queue)
   if not item or item.state == "failed" then
     return
   end
+  item = compact_before(queue, item)
   queue.sending = item
   item.state = "sending"
   queue:_changed()

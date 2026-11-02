@@ -11,6 +11,7 @@ T = MiniTest.new_set({
       child.lua([[
         local config = require("codecompanion.config")
         config.interactions.chat.queue.save = false
+        config.interactions.chat.queue.compact_before = nil
         package.loaded["codecompanion.interactions.chat.queue.view"] = { render = function() end }
         function make_queue()
           local chat = { bufnr = vim.api.nvim_create_buf(false, true), acp_connection = {}, sent = {}, opts = {} }
@@ -56,6 +57,38 @@ T["Queue"]["sends pending prompts in FIFO order after end_turn"] = function()
   h.eq({ "first", "second", "third" }, result.sent)
   h.eq(0, result.remaining)
   h.eq({ 1, 2 }, result.positions)
+end
+
+T["Queue"]["does not compact when the threshold is unset"] = function()
+  local result = child.lua([[
+    local queue, chat = make_queue()
+    chat.acp_connection.session_id = "compact-session"
+    chat.context_usage = { used = 900000, size = 1000000 }
+    require("codecompanion.interactions.chat.acp.commands").register_commands("compact-session", { { name = "compact" } })
+    queue:add({ text = "next" })
+    return chat.sent
+  ]])
+  h.eq({ "next" }, result)
+end
+
+T["Queue"]["compacts once before sending the next queued prompt"] = function()
+  local result = child.lua([[
+    local config = require("codecompanion.config")
+    config.interactions.chat.queue.compact_before = 0.85
+    local queue, chat = make_queue()
+    chat.acp_connection.session_id = "compact-session"
+    chat.context_usage = { used = 900000, size = 1000000 }
+    require("codecompanion.interactions.chat.acp.commands").register_commands("compact-session", { { name = "compact" } })
+    queue:add({ text = "next" })
+    local first = vim.deepcopy(chat.sent)
+    chat.current_request = nil
+    queue:turn_finished({ reason = "end_turn" })
+    vim.wait(20)
+    return { first = first, all = chat.sent, remaining = queue.items[1] and queue.items[1].text }
+  ]])
+  h.eq({ "/compact" }, result.first)
+  h.eq({ "/compact", "next" }, result.all)
+  h.eq("next", result.remaining)
 end
 
 T["Queue"]["does not send while a prompt or autonomous turn is active"] = function()

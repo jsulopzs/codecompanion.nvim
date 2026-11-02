@@ -120,7 +120,7 @@ local defaults = {
         context_warn = 0.8,
         keymaps = { send = "<C-s>", queue = "<M-CR>", park = "gp", manager = "gQ", compact = "gC" },
       },
-      queue = { save = true },
+      queue = { save = true, compact_before = nil },
       tasks = { enabled = true, refresh_ms = 2000 },
       roles = {
         ---The header name for the LLM's messages
