@@ -114,6 +114,8 @@ T["ACP Connection"]["advertises AIR async tasks without changing adapter capabil
       schedules = connection:task_detail_supported("schedules"),
       fs = sent.fs,
       compaction = sent.session.compaction,
+      terminal = sent.auth.terminal,
+      terminal_meta = sent._meta["terminal-auth"],
       original = test_adapter.parameters.clientCapabilities._meta,
     }
   ]])
@@ -123,7 +125,29 @@ T["ACP Connection"]["advertises AIR async tasks without changing adapter capabil
   h.is_false(result.schedules)
   h.is_true(result.fs.readTextFile)
   h.eq({}, result.compaction)
+  h.is_true(result.terminal)
+  h.is_true(result.terminal_meta)
   h.eq(nil, result.original)
+end
+
+T["ACP Connection"]["does not launch a terminal login when Claude advertises one"] = function()
+  local methods = child.lua([[
+    local connection = create_init_connection()
+    connection.adapter_modified = test_adapter
+    connection._agent_info = { authMethods = {
+      { id = "claude-ai-login", name = "Claude Subscription", type = "terminal" },
+      { id = "console-login", name = "Anthropic Console", type = "terminal" },
+    } }
+    local called = {}
+    connection.adapter_modified.defaults.auth_method = nil
+    function connection:send_rpc_request(method)
+      table.insert(called, method)
+      return {}
+    end
+    connection:_authenticate()
+    return called
+  ]])
+  h.eq({}, methods)
 end
 
 T["ACP Connection"]["can handle real initialize response"] = function()

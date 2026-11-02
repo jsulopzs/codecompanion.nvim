@@ -216,7 +216,10 @@ function Connection:_initialize()
   parameters.clientCapabilities = parameters.clientCapabilities or {}
   parameters.clientCapabilities.session = parameters.clientCapabilities.session or {}
   parameters.clientCapabilities.session.compaction = vim.empty_dict()
+  parameters.clientCapabilities.auth = parameters.clientCapabilities.auth or {}
+  parameters.clientCapabilities.auth.terminal = true
   parameters.clientCapabilities._meta = parameters.clientCapabilities._meta or {}
+  parameters.clientCapabilities._meta["terminal-auth"] = true
   parameters.clientCapabilities._meta.jetbrains = parameters.clientCapabilities._meta.jetbrains or {}
   -- AIR asyncTasks is an interim extension until ACP v2 supports updates outside a prompt.
   parameters.clientCapabilities._meta.jetbrains.air = { version = 1, capabilities = { "asyncTasks" } }
@@ -311,7 +314,14 @@ function Connection:_authenticate()
         )
         return false
       end
-      method_id = method_id or (auth_methods[1] and auth_methods[1].id)
+      if not wanted then
+        for _, method in ipairs(auth_methods) do
+          if method.type ~= "terminal" then
+            method_id = method.id
+            break
+          end
+        end
+      end
 
       if method_id then
         local ok = self:send_rpc_request(METHODS.AUTHENTICATE, { methodId = method_id })
