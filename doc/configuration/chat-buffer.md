@@ -57,15 +57,18 @@ require("codecompanion").setup({
         min_height = 3,
         max_height = 10,
         write_in_history = false,
-        keymaps = { send = "<C-s>", queue = "<M-CR>", park = "gp", manager = "gQ" },
+        context_warn = 0.8,
+        keymaps = { send = "<C-s>", queue = "<M-CR>", park = "gp", manager = "gQ", compact = "gC" },
       },
-      queue = { save = true },
+      queue = { save = true, compact_before = nil },
     },
   },
 })
 ```
 
 Set `write_in_history = true` to allow editing the history buffer alongside the composer. Set `enabled = false` to use the original single-buffer chat. Queue and steering are available with the composer enabled.
+
+The composer shows context use when the agent reports both used tokens and the context window size. `context_warn` changes the hint's highlight group when the used share reaches the threshold. Set `queue.compact_before = 0.85` to run the agent's advertised compact command before the next queued prompt when context use exceeds 85%. This option is disabled by default and has no effect when the agent does not advertise a compact command.
 
 ## Completion
 

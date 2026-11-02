@@ -196,9 +196,12 @@ ACP chats open an editable composer directly below the read-only history. It sta
 | `<M-CR>` | Add the prompt to the queue; if the agent is idle and the queue is empty, send it now |
 | `gp` in normal mode | Park the prompt without sending it |
 | `gQ` in normal mode | Open the queue, tasks and schedules manager |
+| `gC` in normal mode | Compact the ACP session now, or queue the compact command while the agent is working |
 | `q` in normal mode | Stop the active turn and pause the queue |
 
 Queued prompts leave in arrival order after the agent ends its turn. A prompt leaves the queue as soon as the agent accepts it, even if the turn later stops or fails. The manager shows pending and parked prompts. Use `<CR>` to send one now, `e` to edit, `dd` to remove, `K` or `J` to move, `P` to move to the front, `p` to switch between parked and queued and `r` to resume a paused queue. A prompt that fails before the agent accepts it stays in the queue for review. `/rewind` and `/resume` must run immediately and cannot be queued.
+
+The composer hint shows context use as `ctx 7% 71k/1M` when the agent reports the context window size. It changes colour at 80% by default. Agents compact on their own when needed; during compaction the hint says `compacting…`, and the history records `compacted` or a failure when the agent finishes. Press `gC` in either the history or composer to request compaction. If the agent has not advertised a compact command, CodeCompanion warns and sends nothing. See [ACP Composer and Queue](/configuration/chat-buffer#acp-composer-and-queue) to change the warning threshold or compact before queued prompts.
 
 When a queued prompt is sent, `#buffer` and other configured editor context names expand, and `/file <path>` attaches an existing file. Other CodeCompanion slash commands are sent as text; CodeCompanion warns when you queue one. Run commands that open a picker directly before queuing the resulting prompt.
 
