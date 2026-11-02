@@ -66,6 +66,7 @@ function Composer:open()
     height = config.interactions.chat.composer.min_height,
   })
   vim.wo[self.winnr].wrap = true
+  vim.wo[self.winnr].winfixheight = true
   self:update_status()
   self:update_height()
   self:dock()
@@ -90,6 +91,7 @@ function Composer:dock()
     and composer_position[2] == chat_position[2]
     and api.nvim_win_get_width(self.winnr) == api.nvim_win_get_width(chat_win)
   then
+    self:update_height()
     return
   end
   self.docking = true
@@ -97,7 +99,9 @@ function Composer:dock()
   self.docking = false
   if not ok then
     log:error("Could not dock the composer: %s", err)
+    return
   end
+  self:update_height()
 end
 
 function Composer:hide()
@@ -129,7 +133,10 @@ function Composer:update_height()
   local settings = config.interactions.chat.composer
   -- One more row for the key hints drawn under the text
   local rows = api.nvim_buf_line_count(self.bufnr) + 1
-  api.nvim_win_set_height(self.winnr, math.min(settings.max_height, math.max(settings.min_height, rows)))
+  local height = math.min(settings.max_height, math.max(settings.min_height, rows))
+  if api.nvim_win_get_height(self.winnr) ~= height then
+    api.nvim_win_set_height(self.winnr, height)
+  end
 end
 
 ---Show the state and what each key does now as a dim line under the text.

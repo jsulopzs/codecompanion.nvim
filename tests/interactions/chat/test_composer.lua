@@ -43,6 +43,29 @@ T["Composer"]["stays below its chat after horizontal and vertical splits close"]
   h.eq({ true, true, true, "Unsent draft" }, result)
 end
 
+T["Composer"]["keeps its height when other windows open and close"] = function()
+  local result = child.lua([[
+    vim.o.lines = 45
+    vim.o.columns = 160
+    local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })
+    local api = vim.api
+    local composer = chat.composer
+    local initial = api.nvim_win_get_height(composer.winnr)
+    api.nvim_set_current_win(chat.ui.winnr)
+    vim.cmd("belowright split")
+    local opened = api.nvim_win_get_height(composer.winnr)
+    api.nvim_set_current_win(chat.ui.winnr)
+    vim.cmd("vsplit")
+    local vertical = api.nvim_win_get_height(composer.winnr)
+    api.nvim_win_close(api.nvim_get_current_win(), true)
+    api.nvim_win_set_height(composer.winnr, 5)
+    api.nvim_exec_autocmds("WinResized", {})
+    vim.wait(100, function() return api.nvim_win_get_height(composer.winnr) == initial end)
+    return { initial, opened, vertical, api.nvim_win_get_height(composer.winnr) }
+  ]])
+  h.eq({ 3, 3, 3, 3 }, result)
+end
+
 T["Composer"]["is editable while the history is locked"] = function()
   local result = child.lua([[
     local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })
