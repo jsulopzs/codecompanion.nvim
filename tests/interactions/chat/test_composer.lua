@@ -135,14 +135,17 @@ T["Composer"]["shows context usage and updates it after a new usage report"] = f
     local warned = segments()
     report(120000, 1000000)
     local after = segments()
-    return { before = #before, first = first[2], warned = warned[2], after = after[2], tokens = chat.tokens, used = chat.context_usage.used }
+    report(50000, nil)
+    local without_size = segments()
+    return { before = #before, first = first[2], warned = warned[2], after = after[2], without_size = #without_size, tokens = chat.tokens, used = chat.context_usage.used }
   ]])
   h.eq(1, result.before)
   h.eq({ " · ctx 7% 71k/1M", "Comment" }, result.first)
   h.eq({ " · ctx 85% 850k/1M", "WarningMsg" }, result.warned)
   h.eq({ " · ctx 12% 120k/1M", "Comment" }, result.after)
-  h.eq(120000, result.tokens)
-  h.eq(120000, result.used)
+  h.eq(1, result.without_size)
+  h.eq(50000, result.tokens)
+  h.eq(50000, result.used)
 end
 
 T["Composer"]["shows one history notice for a completed compaction"] = function()
@@ -158,8 +161,9 @@ T["Composer"]["shows one history notice for a completed compaction"] = function(
     end
     report({ sessionUpdate = "compaction_update", compactionId = "compact-1", status = "in_progress" })
     local during = hint()
-    local completed = { sessionUpdate = "compaction_update", compactionId = "compact-1", status = "completed", _meta = { jetbrains = { air = { contextCompaction = { preTokens = 944000, postTokens = 120000 } } } } }
+    local completed = { sessionUpdate = "compaction_update", compactionId = "compact-1", status = "completed" }
     report(completed)
+    completed._meta = { jetbrains = { air = { contextCompaction = { preTokens = 944000, postTokens = 120000 } } } }
     report(completed)
     chat.builder:flush()
     local history = table.concat(vim.api.nvim_buf_get_lines(chat.bufnr, 0, -1, false), "\n")
@@ -168,6 +172,17 @@ T["Composer"]["shows one history notice for a completed compaction"] = function(
   h.expect_contains("compacting…", result.during)
   h.is_false(result.after:find("compacting…", 1, true) ~= nil)
   h.eq(1, select(2, result.history:gsub("compacted · 944k → 120k", "")))
+end
+
+T["Composer"]["shows a failed compaction's error in the history"] = function()
+  local result = child.lua([[
+    local chat = h.setup_chat_buffer({ display = { chat = { stream_interval = 0 } } }, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })
+    local connection = require("codecompanion.acp").new({ adapter = chat.adapter, chat = chat, session_id = "failed-session" })
+    connection:handle_incoming_request_or_notification({ method = "session/update", params = { sessionId = "failed-session", update = { sessionUpdate = "compaction_update", compactionId = "failed-1", status = "failed", error = "No room" } } })
+    chat.builder:flush()
+    return table.concat(vim.api.nvim_buf_get_lines(chat.bufnr, 0, -1, false), "\n")
+  ]])
+  h.expect_contains("compaction failed: No room", result)
 end
 
 T["Composer"]["sends the advertised compact command now or after the active request"] = function()

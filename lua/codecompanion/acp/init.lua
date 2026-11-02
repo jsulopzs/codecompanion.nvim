@@ -414,12 +414,15 @@ end
 ---@param session_id? string
 ---@return nil
 function Connection:use_session(session_id)
-  if self.session_id ~= session_id and self.chat then
-    self.chat.context_usage = nil
-    self.chat.tokens = nil
-    self.chat.compacting = false
-    if self.chat.composer then
-      self.chat.composer:update_status()
+  if self.session_id ~= session_id then
+    self._compactions = nil
+    if self.chat then
+      self.chat.context_usage = nil
+      self.chat.tokens = nil
+      self.chat.compacting = false
+      if self.chat.composer then
+        self.chat.composer:update_status()
+      end
     end
   end
   self.session_id = session_id
@@ -1056,7 +1059,7 @@ local DISPATCH = {
         end
       end
     elseif m.params.update and m.params.update.sessionUpdate == "compaction_update" then
-      self:handle_compaction_update(m.params.sessionId, m.params.update)
+      self:handle_compaction_update({ session_id = m.params.sessionId, update = m.params.update })
     elseif self._loading_session and self._on_session_update then
       self._on_session_update(m.params.update)
     elseif self._active_prompt then
@@ -1105,39 +1108,62 @@ function Connection:handle_incoming_request_or_notification(notification)
   end
 end
 
+local function compaction_message(opts)
+  local update = opts.update
+  local metadata = opts.metadata
+  if update.status == "failed" then
+    return "compaction failed: " .. (update.error or "unknown error")
+  end
+  if update.status == "cancelled" then
+    return "compaction cancelled"
+  end
+  if metadata and metadata.preTokens and metadata.postTokens then
+    return string.format(
+      "compacted · %sk → %sk",
+      math.floor(metadata.preTokens / 1000 + 0.5),
+      math.floor(metadata.postTokens / 1000 + 0.5)
+    )
+  end
+  return "compacted"
+end
+
 ---Show the state of a session compaction
----@param session_id string
----@param update table
-function Connection:handle_compaction_update(session_id, update)
-  local chat = self:get_chat(session_id)
+---@param opts { session_id: string, update: table }
+function Connection:handle_compaction_update(opts)
+  local update = opts.update
+  local chat = self:get_chat(opts.session_id)
   if not chat or type(update.compactionId) ~= "string" then
     return
   end
   self._compactions = self._compactions or {}
+  local previous = self._compactions[update.compactionId]
+  local metadata = update._meta and update._meta.jetbrains and update._meta.jetbrains.air
+  metadata = metadata and metadata.contextCompaction
   if update.status == "in_progress" then
-    if self._compactions[update.compactionId] then
+    if previous then
       return
     end
-    self._compactions[update.compactionId] = "in_progress"
+    self._compactions[update.compactionId] = { status = "in_progress" }
     chat.compacting = true
-  elseif not self._compactions[update.compactionId] or self._compactions[update.compactionId] == "in_progress" then
-    self._compactions[update.compactionId] = update.status
+  elseif not previous or previous.status == "in_progress" then
     chat.compacting = false
-    local metadata = update._meta and update._meta.jetbrains and update._meta.jetbrains.air
-    metadata = metadata and metadata.contextCompaction
-    local message = "compacted"
-    if update.status == "failed" then
-      message = "compaction failed: " .. (update.error or "unknown error")
-    elseif update.status == "cancelled" then
-      message = "compaction cancelled"
-    elseif metadata and metadata.preTokens and metadata.postTokens then
-      message = string.format(
-        "compacted · %sk → %sk",
-        math.floor(metadata.preTokens / 1000 + 0.5),
-        math.floor(metadata.postTokens / 1000 + 0.5)
-      )
-    end
-    chat:add_buf_message({ role = config.constants.LLM_ROLE, content = "\n" .. message .. "\n" })
+    local last_line = chat:add_buf_message({
+      role = config.constants.LLM_ROLE,
+      content = "\n" .. compaction_message({ update = update, metadata = metadata }) .. "\n",
+    })
+    self._compactions[update.compactionId] = { status = update.status, line_number = last_line and last_line - 1 }
+  elseif
+    update.status == "completed"
+    and metadata
+    and metadata.preTokens
+    and metadata.postTokens
+    and previous.line_number
+  then
+    chat:update_buf_line({
+      line_number = previous.line_number,
+      content = compaction_message({ update = update, metadata = metadata }),
+    })
+    previous.line_number = nil
   end
   if chat.composer then
     chat.composer:update_status()
