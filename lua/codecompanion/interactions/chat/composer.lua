@@ -1,5 +1,6 @@
 local config = require("codecompanion.config")
 local input = require("codecompanion.interactions.shared.input")
+local log = require("codecompanion.utils.log")
 local utils = require("codecompanion.utils")
 
 local api = vim.api
@@ -67,10 +68,36 @@ function Composer:open()
   vim.wo[self.winnr].wrap = true
   self:update_status()
   self:update_height()
+  self:dock()
   if api.nvim_win_is_valid(old_win) then
     api.nvim_set_current_win(old_win)
   end
   self.chat.ui:lock_buf()
+end
+
+function Composer:dock()
+  local chat_win = self.chat.ui.winnr
+  if self.docking or not self.chat.ui:is_visible() or not chat_win or not api.nvim_win_is_valid(chat_win) then
+    return
+  end
+  if not self.winnr or not api.nvim_win_is_valid(self.winnr) then
+    return
+  end
+  local chat_position = api.nvim_win_get_position(chat_win)
+  local composer_position = api.nvim_win_get_position(self.winnr)
+  if
+    composer_position[1] == chat_position[1] + api.nvim_win_get_height(chat_win) + 1
+    and composer_position[2] == chat_position[2]
+    and api.nvim_win_get_width(self.winnr) == api.nvim_win_get_width(chat_win)
+  then
+    return
+  end
+  self.docking = true
+  local ok, err = pcall(api.nvim_win_set_config, self.winnr, { split = "below", win = chat_win })
+  self.docking = false
+  if not ok then
+    log:error("Could not dock the composer: %s", err)
+  end
 end
 
 function Composer:hide()

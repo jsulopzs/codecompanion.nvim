@@ -713,12 +713,27 @@ function Chat.new(args)
       require("codecompanion.interactions.chat.queue.view").open(self.queue)
     end)
     local group = api.nvim_create_augroup("codecompanion.composer." .. self.bufnr, { clear = true })
+    local dock_scheduled = false
+    api.nvim_create_autocmd({ "WinNew", "WinClosed", "WinResized" }, {
+      group = group,
+      callback = function()
+        if dock_scheduled then
+          return
+        end
+        dock_scheduled = true
+        vim.schedule(function()
+          dock_scheduled = false
+          self.composer:dock()
+        end)
+      end,
+    })
     api.nvim_create_autocmd("User", {
       group = group,
       pattern = "CodeCompanionChatOpened",
       callback = function(event)
         if event.data.bufnr == self.bufnr then
           self.composer:open()
+          self.composer:dock()
         end
       end,
     })
@@ -728,6 +743,7 @@ function Chat.new(args)
       callback = function(event)
         if event.data.bufnr == self.bufnr then
           self.composer:hide()
+          self.composer:dock()
         end
       end,
     })

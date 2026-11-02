@@ -16,6 +16,33 @@ T = MiniTest.new_set({
 
 T["Composer"] = MiniTest.new_set()
 
+T["Composer"]["stays below its chat after horizontal and vertical splits close"] = function()
+  local result = child.lua([[
+    local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })
+    local api = vim.api
+    local composer = chat.composer
+    api.nvim_buf_set_lines(composer.bufnr, 0, -1, false, { "Unsent draft" })
+    local function attached()
+      local chat_position = api.nvim_win_get_position(chat.ui.winnr)
+      local composer_position = api.nvim_win_get_position(composer.winnr)
+      return chat_position[2] == composer_position[2]
+        and api.nvim_win_get_width(chat.ui.winnr) == api.nvim_win_get_width(composer.winnr)
+        and composer_position[1] == chat_position[1] + api.nvim_win_get_height(chat.ui.winnr) + 1
+    end
+    api.nvim_set_current_win(chat.ui.winnr)
+    vim.cmd("belowright split")
+    vim.wait(100, attached)
+    local horizontal = attached()
+    vim.cmd("vsplit")
+    vim.wait(100, attached)
+    local vertical = attached()
+    api.nvim_win_close(api.nvim_get_current_win(), true)
+    vim.wait(100, attached)
+    return { horizontal, vertical, attached(), api.nvim_buf_get_lines(composer.bufnr, 0, -1, false)[1] }
+  ]])
+  h.eq({ true, true, true, "Unsent draft" }, result)
+end
+
 T["Composer"]["is editable while the history is locked"] = function()
   local result = child.lua([[
     local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })
