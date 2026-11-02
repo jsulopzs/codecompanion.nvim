@@ -130,6 +130,21 @@ T["Tasks"]["reads the announced RPC output and falls back to a file tail"] = fun
   h.eq({ "rpc output", "_session/async_task/output", "shell", 8192, "ile tail\n", "missing" }, result)
 end
 
+T["Tasks"]["opens output above the chat without changing the window layout"] = function()
+  local result = child.lua([[
+    local tasks, chat = make_tasks()
+    chat.ui.winnr = vim.api.nvim_get_current_win()
+    local before = #vim.api.nvim_tabpage_list_wins(0)
+    require("codecompanion.interactions.chat.tasks.output").open({ chat = chat, task = { name = "npm test", state = "completed" } })
+    local win = vim.api.nvim_get_current_win()
+    local window_config = vim.api.nvim_win_get_config(win)
+    return { before, #vim.api.nvim_tabpage_list_wins(0), window_config.relative, window_config.title }
+  ]])
+  h.eq(result[1], result[2] - 1)
+  h.eq("win", result[3])
+  h.eq("npm test", result[4][1][1])
+end
+
 T["Tasks"]["stops a selected task and asks the agent to cancel a selected schedule"] = function()
   local result = child.lua([[
     local tasks, chat = make_tasks({ schedules = true })

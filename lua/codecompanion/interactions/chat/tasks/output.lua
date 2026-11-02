@@ -38,10 +38,21 @@ function M.open(opts)
   vim.bo[bufnr].buftype = "nofile"
   vim.bo[bufnr].bufhidden = "wipe"
   vim.bo[bufnr].modifiable = false
-  vim.cmd("belowright split")
-  local win = vim.api.nvim_get_current_win()
-  vim.api.nvim_win_set_buf(win, bufnr)
-  vim.api.nvim_win_set_height(win, 12)
+  local chat_win = opts.chat.ui.winnr
+  local width = math.max(1, math.min(100, vim.api.nvim_win_get_width(chat_win) - 4))
+  local height = math.max(1, math.min(12, vim.api.nvim_win_get_height(chat_win) - 2))
+  local win = vim.api.nvim_open_win(bufnr, true, {
+    relative = "win",
+    win = chat_win,
+    row = 1,
+    col = 1,
+    width = width,
+    height = height,
+    border = "rounded",
+    title = { { opts.task.name or "Task output" } },
+    title_pos = "center",
+    style = "minimal",
+  })
   local function refresh()
     if not vim.api.nvim_win_is_valid(win) or not vim.api.nvim_buf_is_valid(bufnr) then
       return
