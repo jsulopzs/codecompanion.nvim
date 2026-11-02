@@ -199,6 +199,10 @@ function Composer:update_status()
   then
     table.insert(segments, { " · limit · resets " .. os.date("%H:%M", rate_limit.resetsAt), "WarningMsg" })
   end
+  local failure = self.chat.acp_session_failure
+  if failure and vim.tbl_contains(failure.actions or {}, "login") then
+    table.insert(segments, { " · login required · " .. keys.login .. " login", "WarningMsg" })
+  end
   table.insert(segments, {
     string.format(
       " · %s %s · %s queue · %s park · %s manage · %s compact · %s login%s",

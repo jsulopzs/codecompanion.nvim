@@ -170,6 +170,19 @@ T["Composer"]["shows an active rate limit before keys and hides it after reset"]
   h.eq(2, result[3])
 end
 
+T["Composer"]["links an AIR login action to gL before the key hints"] = function()
+  local result = child.lua([[
+    local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })
+    chat.acp_session_failure = { actions = { "login" }, category = "access" }
+    chat.composer:update_status()
+    local marks = vim.api.nvim_buf_get_extmarks(chat.composer.bufnr, -1, 0, -1, { details = true })
+    local segments = marks[#marks][4].virt_lines[1]
+    return { segments[2], segments[3][1] }
+  ]])
+  h.eq({ " · login required · gL login", "WarningMsg" }, result[1])
+  h.is_true(vim.startswith(result[2], " · <C-s> send"))
+end
+
 T["Composer"]["shows one history notice for a completed compaction"] = function()
   local result = child.lua([[
     local chat = h.setup_chat_buffer({ display = { chat = { stream_interval = 0 } } }, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })

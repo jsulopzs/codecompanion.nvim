@@ -93,7 +93,8 @@ T["ACP Connection"]["advertises form elicitation as a JSON object"] = function()
     return vim.json.encode(connection:prepare_adapter().parameters.clientCapabilities)
   ]])
 
-  h.expect_contains('"elicitation":{"form":{}}', capabilities)
+  h.expect_contains('"form":{}', capabilities)
+  h.expect_contains('"url":{}', capabilities)
   h.expect_contains('"fs":{', capabilities)
 end
 
@@ -219,6 +220,123 @@ T["ACP Connection"]["restarts the agent and reloads the same session after login
     return { ok, killed, loaded, connection._turns["session-1"][1].checkpoint.tree }
   ]])
   h.eq({ true, true, "session-1", "before" }, result)
+end
+
+T["ACP Connection"]["selects Codex browser login methods without listing API key"] = function()
+  local result = child.lua([[
+    local login = require("codecompanion.interactions.chat.acp.login")
+    local select = vim.ui.select
+    local choices, selected
+    vim.ui.select = function(items, _, callback)
+      choices = vim.tbl_map(function(item) return item.id end, items)
+      callback(items[1])
+    end
+    login.run_agent = function(opts) selected = opts.method.id end
+    login.pick({ acp_connection = {
+      _agent_info = { authMethods = {
+        { id = "api-key", name = "API Key" },
+        { id = "chat-gpt", name = "ChatGPT" },
+        { id = "chat-gpt-device-code", name = "ChatGPT device code" },
+      } },
+      session_id = "session-1", can_load_session = function() return true end,
+    } })
+    vim.ui.select = select
+    return { choices, selected }
+  ]])
+  h.eq({ "chat-gpt", "chat-gpt-device-code" }, result[1])
+  h.eq("chat-gpt", result[2])
+end
+
+T["ACP Connection"]["logs out and authenticates before reloading an agent login"] = function()
+  local result = child.lua([[
+    local login = require("codecompanion.interactions.chat.acp.login")
+    local calls = {}
+    local connection = {
+      _agent_info = { agentCapabilities = { auth = { logout = {} } } },
+      adapter = { defaults = { auth_method = "api-key" } },
+      send_rpc_request = function(_, method, params)
+        table.insert(calls, { method, params.methodId })
+        return {}
+      end,
+      restart_after_login = function()
+        table.insert(calls, { "restart" })
+        return true
+      end,
+    }
+    local chat = {
+      acp_connection = connection,
+      _set_status = function() end, _clear_status = function() end,
+      queue = { pause = function(_, reason) table.insert(calls, { "pause", reason }) end },
+    }
+    login.run_agent({ chat = chat, method = { id = "chat-gpt" } })
+    return { calls, connection.adapter.defaults.auth_method, chat._acp_login == nil }
+  ]])
+  h.eq({ { "logout" }, { "authenticate", "chat-gpt" }, { "pause", "login" }, { "restart" } }, result[1])
+  h.eq("chat-gpt", result[2])
+  h.is_true(result[3])
+end
+
+T["ACP Connection"]["does not restart the chat when an agent login fails"] = function()
+  local result = child.lua([[
+    local login = require("codecompanion.interactions.chat.acp.login")
+    local restarted, cleared = false, false
+    local chat = {
+      acp_connection = {
+        _agent_info = { agentCapabilities = { auth = {} } },
+        send_rpc_request = function() return nil end,
+        restart_after_login = function() restarted = true end,
+      },
+      _set_status = function() end, _clear_status = function() cleared = true end,
+      queue = { pause = function() error("queue must stay as it was") end },
+    }
+    login.run_agent({ chat = chat, method = { id = "chat-gpt" } })
+    return { restarted, cleared, chat._acp_login == nil }
+  ]])
+  h.eq({ false, true, true }, result)
+end
+
+T["ACP Connection"]["cancels an agent login without restarting the chat"] = function()
+  local result = child.lua([[
+    local login = require("codecompanion.interactions.chat.acp.login")
+    local async = require("codecompanion.utils.async")
+    local resume, restarted
+    local chat = {
+      acp_connection = {
+        _agent_info = { agentCapabilities = { auth = {} } },
+        send_rpc_request = function() return async.wait(function(callback) resume = callback end) end,
+        restart_after_login = function() restarted = true end,
+      },
+      _set_status = function() end, _clear_status = function() end,
+      queue = { pause = function() error("queue must stay as it was") end },
+    }
+    login.run_agent({ chat = chat, method = { id = "chat-gpt" } })
+    login.cancel(chat)
+    resume({})
+    return { restarted == nil, chat._acp_login == nil }
+  ]])
+  h.eq({ true, true }, result)
+end
+
+T["ACP Connection"]["shows the URL and code supplied by an agent login"] = function()
+  local result = child.lua([[
+    local connection = create_test_connection()
+    local selected, status, opened, response
+    local select, open = vim.ui.select, vim.ui.open
+    connection.chat = { _set_status = function(_, opts) status = opts.message end }
+    connection.send_result = function(_, _, value) response = value end
+    vim.ui.select = function(_, opts, callback)
+      selected = opts.prompt
+      callback("Open verification page")
+    end
+    vim.ui.open = function(url) opened = url end
+    connection:handle_url_elicitation(1, { mode = "url", url = "https://example.test/login", message = "Enter code ABCD" })
+    vim.ui.select, vim.ui.open = select, open
+    return { selected, status, opened, response.action }
+  ]])
+  h.expect_contains("ABCD", result[1])
+  h.expect_contains("https://example.test/login", result[2])
+  h.eq("https://example.test/login", result[3])
+  h.eq("accept", result[4])
 end
 
 T["ACP Connection"]["can handle real initialize response"] = function()

@@ -799,6 +799,30 @@ function Connection:send_error(id, message, code)
   self:write_message(self.methods.encode(jsonrpc.error(id, message, code or jsonrpc.errors.INTERNAL)) .. "\n")
 end
 
+---Show a URL elicitation from an agent login and return the user's choice
+---@param id number
+---@param params table
+---@return nil
+function Connection:handle_url_elicitation(id, params)
+  if type(params.url) ~= "string" or not params.url:match("^https?://") then
+    return self:send_error(id, "invalid login URL", jsonrpc.errors.INVALID_PARAMS)
+  end
+  local message = (params.message or "Open the verification page") .. "\n" .. params.url
+  if self.chat then
+    self.chat:_set_status({ key = "auth", message = message })
+  end
+  vim.ui.select({ "Open verification page", "Cancel" }, {
+    kind = "codecompanion.nvim",
+    prompt = message,
+  }, function(choice)
+    if choice ~= "Open verification page" then
+      return self:send_result(id, { action = "cancel" })
+    end
+    vim.ui.open(params.url)
+    self:send_result(id, { action = "accept" })
+  end)
+end
+
 ---Wait for a specific response ID
 ---@param id number
 ---@return nil
@@ -833,6 +857,7 @@ function Connection:prepare_adapter()
   -- Form elicitation is rendered by the chat buffer, so every agent can ask the user questions
   local capabilities = adapter.parameters.clientCapabilities or {}
   capabilities.elicitation = capabilities.elicitation or { form = vim.empty_dict() }
+  capabilities.elicitation.url = capabilities.elicitation.url or vim.empty_dict()
   adapter.parameters.clientCapabilities = capabilities
 
   return adapter
@@ -1124,6 +1149,9 @@ local DISPATCH = {
     end
   end,
   [METHODS.ELICITATION_CREATE] = function(self, m)
+    if m.params and m.params.mode == "url" then
+      return self:handle_url_elicitation(m.id, m.params)
+    end
     if self._active_prompt then
       self._active_prompt:handle_elicitation_request(m.id, m.params)
     end
