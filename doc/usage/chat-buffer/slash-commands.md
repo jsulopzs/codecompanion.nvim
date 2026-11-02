@@ -241,7 +241,7 @@ The _rules_ slash command adds a [rules](/usage/chat-buffer/rules) group to the 
 
 ## /login
 
-The _login_ slash command lists interactive login methods advertised by an ACP agent. Terminal methods run in a floating terminal over the chat. Agent methods let the agent handle the browser login and any verification URL or code. A successful login restarts the agent, reloads the same session and pauses the queue. Cancelling or failing the login keeps the chat open. If the agent advertises no interactive methods, CodeCompanion shows a notice. An agent logout may already have removed your previous credentials when you cancel a browser login.
+The _login_ slash command lists interactive login methods advertised by an ACP agent. Terminal methods run in a floating terminal over the chat. Agent methods let the agent handle browser login and any verification URL or code. A successful login restarts the agent, reloads the same session and pauses the queue. Cancelling or failing the login keeps the chat open. If the agent advertises no interactive methods, CodeCompanion shows a notice. CodeCompanion does not log out before authentication. If an agent rejects authentication because a session is active, a separate selector asks whether to close it and retry. Cancelling that selector keeps the current session.
 
 ## /rewind
 

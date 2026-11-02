@@ -3687,10 +3687,11 @@ shows `limit · resets HH:MM` in local time before the keys. A limit error adds
 Press `gL` in the history or composer, or use
 |codecompanion-usage-chat-buffer-slash-commands-login|, to choose an
 interactive login method. Terminal methods run over the chat, while agent
-methods open a browser or show a verification URL. A successful login restarts
-the agent and reloads the current session with the queue paused. Cancelling or
-failing a browser login keeps the chat open, although the agent may already
-have removed the previous credentials during logout.
+methods handle browser login or show a verification URL when needed. A
+successful login restarts the agent and reloads the current session with the
+queue paused. Cancelling or failing an agent login keeps the chat open and does
+not call logout. CodeCompanion asks before logging out only if the agent
+rejects authentication because another session is active.
 
 Press `gA` in a Claude Code or Codex chat to open the other agent with a draft
 handoff in its composer. Review or edit the draft before sending it. The draft
@@ -5301,12 +5302,13 @@ to the chat buffer. It's also available in the
 
 The `login` slash command lists interactive login methods advertised by an ACP
 agent. Terminal methods run in a floating terminal over the chat. Agent methods
-let the agent handle the browser login and any verification URL or code. A
+let the agent handle browser login and any verification URL or code. A
 successful login restarts the agent, reloads the same session and pauses the
 queue. Cancelling or failing the login keeps the chat open. If the agent
-advertises no interactive methods, CodeCompanion shows a notice. An agent
-logout may already have removed your previous credentials when you cancel a
-browser login.
+advertises no interactive methods, CodeCompanion shows a notice. CodeCompanion
+does not log out before authentication. If an agent rejects authentication
+because a session is active, a separate selector asks whether to close it and
+retry. Cancelling that selector keeps the current session.
 
 
 /REWIND ~
@@ -15156,10 +15158,11 @@ CodeCompanion advertises `clientCapabilities.auth.terminal`,
 `_meta["terminal-auth"]` and URL elicitation during initialisation. The
 |codecompanion-usage-chat-buffer-slash-commands-login| command and `gL` list
 interactive methods. Terminal methods run in a floating terminal. Agent methods
-ask the agent to log out, when supported, then authenticate. The agent handles
-the browser login and any verification URL or code. After a successful login,
-CodeCompanion restarts the agent and reloads the same session. It does not read
-or write credentials.
+ask the agent to authenticate directly; the agent handles browser login and any
+verification URL or code. CodeCompanion asks before logging out only if the
+agent rejects authentication because a session is already active. After a
+successful login, CodeCompanion restarts the agent and reloads the same
+session. It does not read or write credentials.
 
 Claude Code reports rate limit status in
 `usage_update._meta["_claude/rateLimit"]`. When the limit is active and its
@@ -15170,10 +15173,13 @@ actionable session error. A limit error pauses queued prompts and points to
 
 Codex advertises `chat-gpt` as an agent login method and can advertise
 `chat-gpt-device-code` when URL elicitation is available. `gL` excludes
-`api-key` because it needs a key. Codex does not include rate limit status in
-`usage_update`. Its AIR session failure can report a `login` action, which the
-composer links to `gL`. Cancelling a browser login keeps the chat open but
-cannot restore credentials already removed by the agent's logout.
+`api-key` because it needs a key. When Codex needs a new login, it completes in
+the browser. If Codex already has a working ChatGPT login, its `authenticate`
+method accepts that session without opening the browser, so `gL` cannot switch
+accounts in that case. `gL` does not close the current session unless you
+explicitly confirm a logout requested after an agent rejection. Codex does not
+include rate limit status in `usage_update`. Its AIR session failure can report
+a `login` action, which the composer links to `gL`.
 
 
 AUTONOMOUS TURNS

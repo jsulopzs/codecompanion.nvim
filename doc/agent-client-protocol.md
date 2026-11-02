@@ -82,11 +82,11 @@ If the session can't be loaded or forked, the chat starts a new one.
 
 ### Login and Limits
 
-CodeCompanion advertises `clientCapabilities.auth.terminal`, `_meta["terminal-auth"]` and URL elicitation during initialisation. The [/login](/usage/chat-buffer/slash-commands#login) command and `gL` list interactive methods. Terminal methods run in a floating terminal. Agent methods ask the agent to log out, when supported, then authenticate. The agent handles the browser login and any verification URL or code. After a successful login, CodeCompanion restarts the agent and reloads the same session. It does not read or write credentials.
+CodeCompanion advertises `clientCapabilities.auth.terminal`, `_meta["terminal-auth"]` and URL elicitation during initialisation. The [/login](/usage/chat-buffer/slash-commands#login) command and `gL` list interactive methods. Terminal methods run in a floating terminal. Agent methods ask the agent to authenticate directly; the agent handles browser login and any verification URL or code. CodeCompanion asks before logging out only if the agent rejects authentication because a session is already active. After a successful login, CodeCompanion restarts the agent and reloads the same session. It does not read or write credentials.
 
 Claude Code reports rate limit status in `usage_update._meta["_claude/rateLimit"]`. When the limit is active and its reset time is in the future, the composer shows the reset time in local time. CodeCompanion also advertises AIR `sessionFailure` so agents can report an actionable session error. A limit error pauses queued prompts and points to `gL`.
 
-Codex advertises `chat-gpt` as an agent login method and can advertise `chat-gpt-device-code` when URL elicitation is available. `gL` excludes `api-key` because it needs a key. Codex does not include rate limit status in `usage_update`. Its AIR session failure can report a `login` action, which the composer links to `gL`. Cancelling a browser login keeps the chat open but cannot restore credentials already removed by the agent's logout.
+Codex advertises `chat-gpt` as an agent login method and can advertise `chat-gpt-device-code` when URL elicitation is available. `gL` excludes `api-key` because it needs a key. When Codex needs a new login, it completes in the browser. If Codex already has a working ChatGPT login, its `authenticate` method accepts that session without opening the browser, so `gL` cannot switch accounts in that case. `gL` does not close the current session unless you explicitly confirm a logout requested after an agent rejection. Codex does not include rate limit status in `usage_update`. Its AIR session failure can report a `login` action, which the composer links to `gL`.
 
 ### Autonomous Turns
 
