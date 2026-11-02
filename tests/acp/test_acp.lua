@@ -113,6 +113,7 @@ T["ACP Connection"]["advertises AIR async tasks without changing adapter capabil
       output = connection:task_detail_supported("output"),
       schedules = connection:task_detail_supported("schedules"),
       fs = sent.fs,
+      compaction = sent.session.compaction,
       original = test_adapter.parameters.clientCapabilities._meta,
     }
   ]])
@@ -121,6 +122,7 @@ T["ACP Connection"]["advertises AIR async tasks without changing adapter capabil
   h.is_true(result.output)
   h.is_false(result.schedules)
   h.is_true(result.fs.readTextFile)
+  h.eq({}, result.compaction)
   h.eq(nil, result.original)
 end
 

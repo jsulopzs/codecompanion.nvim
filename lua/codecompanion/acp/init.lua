@@ -214,6 +214,8 @@ function Connection:_initialize()
 
   local parameters = vim.deepcopy(self.adapter_modified.parameters)
   parameters.clientCapabilities = parameters.clientCapabilities or {}
+  parameters.clientCapabilities.session = parameters.clientCapabilities.session or {}
+  parameters.clientCapabilities.session.compaction = vim.empty_dict()
   parameters.clientCapabilities._meta = parameters.clientCapabilities._meta or {}
   parameters.clientCapabilities._meta.jetbrains = parameters.clientCapabilities._meta.jetbrains or {}
   -- AIR asyncTasks is an interim extension until ACP v2 supports updates outside a prompt.
@@ -1045,6 +1047,8 @@ local DISPATCH = {
           chat.composer:update_status()
         end
       end
+    elseif m.params.update and m.params.update.sessionUpdate == "compaction_update" then
+      self:handle_compaction_update(m.params.sessionId, m.params.update)
     elseif self._loading_session and self._on_session_update then
       self._on_session_update(m.params.update)
     elseif self._active_prompt then
@@ -1090,6 +1094,45 @@ function Connection:handle_incoming_request_or_notification(notification)
   local handler = DISPATCH[notification.method]
   if handler then
     return handler(self, notification)
+  end
+end
+
+---Show the state of a session compaction
+---@param session_id string
+---@param update table
+function Connection:handle_compaction_update(session_id, update)
+  local chat = self:get_chat(session_id)
+  if not chat or type(update.compactionId) ~= "string" then
+    return
+  end
+  self._compactions = self._compactions or {}
+  if update.status == "in_progress" then
+    if self._compactions[update.compactionId] then
+      return
+    end
+    self._compactions[update.compactionId] = "in_progress"
+    chat.compacting = true
+  elseif not self._compactions[update.compactionId] or self._compactions[update.compactionId] == "in_progress" then
+    self._compactions[update.compactionId] = update.status
+    chat.compacting = false
+    local metadata = update._meta and update._meta.jetbrains and update._meta.jetbrains.air
+    metadata = metadata and metadata.contextCompaction
+    local message = "compacted"
+    if update.status == "failed" then
+      message = "compaction failed: " .. (update.error or "unknown error")
+    elseif update.status == "cancelled" then
+      message = "compaction cancelled"
+    elseif metadata and metadata.preTokens and metadata.postTokens then
+      message = string.format(
+        "compacted · %sk → %sk",
+        math.floor(metadata.preTokens / 1000 + 0.5),
+        math.floor(metadata.postTokens / 1000 + 0.5)
+      )
+    end
+    chat:add_buf_message({ role = config.constants.LLM_ROLE, content = "\n" .. message .. "\n" })
+  end
+  if chat.composer then
+    chat.composer:update_status()
   end
 end
 

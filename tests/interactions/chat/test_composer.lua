@@ -145,6 +145,31 @@ T["Composer"]["shows context usage and updates it after a new usage report"] = f
   h.eq(120000, result.used)
 end
 
+T["Composer"]["shows one history notice for a completed compaction"] = function()
+  local result = child.lua([[
+    local chat = h.setup_chat_buffer({ display = { chat = { stream_interval = 0 } } }, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })
+    local connection = require("codecompanion.acp").new({ adapter = chat.adapter, chat = chat, session_id = "compaction-session" })
+    local function report(update)
+      connection:handle_incoming_request_or_notification({ method = "session/update", params = { sessionId = "compaction-session", update = update } })
+    end
+    local function hint()
+      local marks = vim.api.nvim_buf_get_extmarks(chat.composer.bufnr, -1, 0, -1, { details = true })
+      return marks[#marks][4].virt_lines[1][1][1]
+    end
+    report({ sessionUpdate = "compaction_update", compactionId = "compact-1", status = "in_progress" })
+    local during = hint()
+    local completed = { sessionUpdate = "compaction_update", compactionId = "compact-1", status = "completed", _meta = { jetbrains = { air = { contextCompaction = { preTokens = 944000, postTokens = 120000 } } } } }
+    report(completed)
+    report(completed)
+    chat.builder:flush()
+    local history = table.concat(vim.api.nvim_buf_get_lines(chat.bufnr, 0, -1, false), "\n")
+    return { during = during, after = hint(), history = history }
+  ]])
+  h.expect_contains("compacting…", result.during)
+  h.is_false(result.after:find("compacting…", 1, true) ~= nil)
+  h.eq(1, select(2, result.history:gsub("compacted · 944k → 120k", "")))
+end
+
 T["Composer"]["submits text as a visible user message"] = function()
   local result = child.lua([[
     local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })
