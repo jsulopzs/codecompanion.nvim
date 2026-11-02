@@ -167,6 +167,9 @@ function Composer:update_status()
   if self.chat.compacting then
     state = "compacting…"
   end
+  if self.chat.pending_answer then
+    state = "waiting for your answer · " .. table.concat(self.chat.pending_answer.keys, " ")
+  end
   if self.chat.queue.paused then
     state = state .. ", queue paused"
   end

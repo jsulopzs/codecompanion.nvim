@@ -1600,6 +1600,26 @@ function Chat:submit(opts)
   utils.fire("ChatSubmitted", { bufnr = self.bufnr, id = self.id, type = self.adapter.type })
 end
 
+---The buffers where the keys that answer a question or approval work: the history and, when present, the composer
+---@return number[]
+function Chat:answer_buffers()
+  local buffers = { self.bufnr }
+  if self.composer and api.nvim_buf_is_valid(self.composer.bufnr) then
+    table.insert(buffers, self.composer.bufnr)
+  end
+  return buffers
+end
+
+---Record the keys that answer the pending question or approval, or clear them with nil
+---@param keys string[]|nil
+---@return nil
+function Chat:set_pending_answer(keys)
+  self.pending_answer = keys and { keys = keys } or nil
+  if self.composer then
+    self.composer:update_status()
+  end
+end
+
 ---@param text string
 ---@return boolean
 function Chat:send_text(text)

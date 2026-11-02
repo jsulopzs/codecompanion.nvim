@@ -196,11 +196,16 @@ function M.ask(chat, opts)
   -- The answer keys are normal-mode keymaps; mode changes once this returns, after they're bound
   ui_utils.leave_insert_in(bufnr)
 
-  local overrides = keymaps.Override.new(bufnr)
+  local overrides = vim.tbl_map(keymaps.Override.new, chat:answer_buffers())
   local resolved = false
+  local keys = {}
 
   local function bind(lhs, callback, desc)
-    overrides:set(lhs, callback, { desc = desc })
+    for _, override in ipairs(overrides) do
+      override:set(lhs, callback, { desc = desc })
+    end
+    table.insert(keys, lhs)
+    chat:set_pending_answer(keys)
   end
 
   ---@param answer string|nil
@@ -210,7 +215,10 @@ function M.ask(chat, opts)
       return
     end
     resolved = true
-    overrides:restore()
+    for _, override in ipairs(overrides) do
+      override:restore()
+    end
+    chat:set_pending_answer(nil)
     add_summary(chat, { answer = answer })
     utils.fire("ToolQuestionAnswered", {
       answer = answer,

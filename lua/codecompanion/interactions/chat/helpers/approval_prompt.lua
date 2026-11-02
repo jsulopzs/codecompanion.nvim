@@ -35,10 +35,12 @@ local function build_message(opts)
 end
 
 ---Clean up keymaps set for the approval prompt
----@param opts { bufnr: number, choices: table }
+---@param opts { buffers: number[], choices: table }
 local function cleanup_keymaps(opts)
-  for _, choice in ipairs(opts.choices) do
-    pcall(vim.keymap.del, "n", choice.keymap, { buffer = opts.bufnr })
+  for _, bufnr in ipairs(opts.buffers) do
+    for _, choice in ipairs(opts.choices) do
+      pcall(vim.keymap.del, "n", choice.keymap, { buffer = bufnr })
+    end
   end
 end
 
@@ -77,28 +79,30 @@ local function add_selection(chat, choice_label)
   )
 end
 
----@param opts { bufnr: number, choices: CodeCompanion.Chat.ApprovalChoice[], is_resolved: fun(): boolean, on_done: fun(choice_label: string) }
+---@param opts { buffers: number[], choices: CodeCompanion.Chat.ApprovalChoice[], is_resolved: fun(): boolean, on_done: fun(choice_label: string) }
 ---@return nil
 local function set_keymaps(opts)
-  for _, choice in ipairs(opts.choices) do
-    vim.keymap.set("n", choice.keymap, function()
-      if opts.is_resolved() then
-        return
-      end
+  for _, bufnr in ipairs(opts.buffers) do
+    for _, choice in ipairs(opts.choices) do
+      vim.keymap.set("n", choice.keymap, function()
+        if opts.is_resolved() then
+          return
+        end
 
-      if not choice.preview then
-        opts.on_done(choice.label)
-      end
+        if not choice.preview then
+          opts.on_done(choice.label)
+        end
 
-      log:debug("[approval_prompt] User selected: %s", choice.label)
+        log:debug("[approval_prompt] User selected: %s", choice.label)
 
-      choice.callback()
-    end, {
-      buffer = opts.bufnr,
-      desc = choice.label,
-      silent = true,
-      nowait = true,
-    })
+        choice.callback()
+      end, {
+        buffer = bufnr,
+        desc = choice.label,
+        silent = true,
+        nowait = true,
+      })
+    end
   end
 end
 
@@ -130,6 +134,7 @@ function M.request(chat, opts)
   end
 
   local resolved = false
+  local buffers = chat:answer_buffers()
 
   ---Function to call when the user has made a choice
   ---@param choice_label string
@@ -140,19 +145,23 @@ function M.request(chat, opts)
       return
     end
     resolved = true
-    cleanup_keymaps({ bufnr = bufnr, choices = opts.choices })
+    cleanup_keymaps({ buffers = buffers, choices = opts.choices })
+    chat:set_pending_answer(nil)
     add_selection(chat, choice_label)
     utils.fire("ToolApprovalFinished", { bufnr = bufnr, choice = choice_label })
   end
 
   set_keymaps({
-    bufnr = bufnr,
+    buffers = buffers,
     choices = opts.choices,
     is_resolved = function()
       return resolved
     end,
     on_done = on_done,
   })
+  chat:set_pending_answer(vim.tbl_map(function(choice)
+    return choice.keymap
+  end, opts.choices))
   ui_utils.leave_insert_in(bufnr)
 
   return on_done
