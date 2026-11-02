@@ -58,7 +58,7 @@ require("codecompanion").setup({
         max_height = 10,
         write_in_history = false,
         context_warn = 0.8,
-        keymaps = { send = "<C-s>", queue = "<M-CR>", park = "gp", manager = "gQ", compact = "gC" },
+        keymaps = { send = "<C-s>", queue = "<M-CR>", park = "gp", manager = "gQ", compact = "gC", login = "gL", handoff = "gA" },
       },
       queue = { save = true, compact_before = nil },
     },

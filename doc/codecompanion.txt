@@ -3611,6 +3611,12 @@ are:
   gu                      rewind                   Rewind to an earlier
                                                    message
 
+  gL                      login                    Choose an advertised
+                                                   terminal login method
+
+  gA                      handoff                  Draft a handoff to the
+                                                   other ACP agent
+
   } {                     next_chat previous_chat  Move to the next or
                                                    previous chat
 
@@ -3651,6 +3657,9 @@ buffer type as other CodeCompanion inputs.
                                       queue the compact command while the
                                       agent is working
 
+  gL in normal mode                   Choose a terminal login method
+                                      advertised by the agent
+
   q in normal mode                    Stop the active turn and pause the
                                       queue
   -----------------------------------------------------------------------
@@ -3670,6 +3679,21 @@ either the history or composer to request compaction. If the agent has not
 advertised a compact command, CodeCompanion warns and sends nothing. See
 |codecompanion-configuration-chat-buffer-acp-composer-and-queue| to change the
 warning threshold or compact before queued prompts.
+
+When an agent reports an active rate limit with a future reset time, the hint
+shows `limit · resets HH:MM` in local time before the keys. A limit error adds
+`gL para iniciar sesión con otra cuenta` to the error and pauses the queue.
+Press `gL` in the history or composer, or use
+|codecompanion-usage-chat-buffer-slash-commands-login|, to choose a terminal
+login method. A successful login restarts the agent and reloads the current
+session with the queue paused. Cancelling or failing the login leaves the chat
+as it was.
+
+Press `gA` in a Claude Code or Codex chat to open the other agent with a draft
+handoff in its composer. Review or edit the draft before sending it. The draft
+keeps the first user message, the newest exchanges that fit in 12,000
+characters and changed file paths from available rewind checkpoints. The
+original chat remains available.
 
 When a queued prompt is sent, `#buffer` and other configured editor context
 names expand, and `/file <path>` attaches an existing file. Other CodeCompanion
@@ -4989,6 +5013,9 @@ Slash commands add context to the chat buffer and act on the chat itself. Type
 
   -help                               Add content from Vim help tags
 
+  -login                              Choose an ACP agent's terminal
+                                      login method
+
   -mcp                                Start and stop MCP servers
 
   -mcp-prompts                        Add a prompt from an MCP server
@@ -5265,6 +5292,16 @@ one into a chat buffer. What it lists depends on the adapter:
 The `rules` slash command adds a |codecompanion-usage-chat-buffer-rules| group
 to the chat buffer. It's also available in the
 |codecompanion-usage-cli-slash-commands|.
+
+
+/LOGIN ~
+
+The `login` slash command lists terminal login methods advertised by an ACP
+agent. Choose one to run its login command in a floating terminal over the
+chat. A successful login restarts the agent, reloads the same session and
+pauses the queue. Cancelling the selector or terminal leaves the chat
+unchanged. If the agent advertises no terminal methods, CodeCompanion shows a
+notice and leaves the chat unchanged.
 
 
 /REWIND ~
@@ -7505,7 +7542,7 @@ queue persistence with:
             max_height = 10,
             write_in_history = false,
             context_warn = 0.8,
-            keymaps = { send = "<C-s>", queue = "<M-CR>", park = "gp", manager = "gQ", compact = "gC" },
+            keymaps = { send = "<C-s>", queue = "<M-CR>", park = "gp", manager = "gQ", compact = "gC", login = "gL", handoff = "gA" },
           },
           queue = { save = true, compact_before = nil },
         },
@@ -15106,6 +15143,28 @@ untouched:
 <
 
 If the session can't be loaded or forked, the chat starts a new one.
+
+
+TERMINAL LOGIN AND LIMITS
+
+CodeCompanion advertises `clientCapabilities.auth.terminal` and
+`_meta["terminal-auth"]` during initialisation. An agent can return terminal
+login methods with an executable command and arguments. The
+|codecompanion-usage-chat-buffer-slash-commands-login| command and `gL` run a
+chosen method in a floating terminal. After it succeeds, CodeCompanion restarts
+the agent and reloads the same session. It does not read or write credentials.
+
+Claude Code reports rate limit status in
+`usage_update._meta["_claude/rateLimit"]`. When the limit is active and its
+reset time is in the future, the composer shows the reset time in local time.
+CodeCompanion also advertises AIR `sessionFailure` so agents can report an
+actionable session error. A limit error pauses queued prompts and points to
+`gL`.
+
+Codex currently advertises agent handled authentication methods, without
+terminal commands, and does not include rate limit status in `usage_update`.
+Its AIR session failure can report a `login` action, but `gL` needs a terminal
+method from the agent before it can run one.
 
 
 AUTONOMOUS TURNS

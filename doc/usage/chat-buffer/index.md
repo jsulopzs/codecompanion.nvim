@@ -181,6 +181,8 @@ Press `?` in a chat buffer to list every keymap. The defaults in normal mode are
 | `gy` | `yank_code` | Yank code from the last codeblock |
 | `K` | `tool_call_details` | Show the tool call under the cursor |
 | `gu` | `rewind` | Rewind to an earlier message |
+| `gL` | `login` | Choose an advertised terminal login method |
+| `gA` | `handoff` | Draft a handoff to the other ACP agent |
 | `}` `{` | `next_chat` `previous_chat` | Move to the next or previous chat |
 | `]]` `[[` | `next_header` `previous_header` | Jump to the next or previous header |
 
@@ -197,11 +199,16 @@ ACP chats open an editable composer directly below the read-only history. It sta
 | `gp` in normal mode | Park the prompt without sending it |
 | `gQ` in normal mode | Open the queue, tasks and schedules manager |
 | `gC` in normal mode | Compact the ACP session now, or queue the compact command while the agent is working |
+| `gL` in normal mode | Choose a terminal login method advertised by the agent |
 | `q` in normal mode | Stop the active turn and pause the queue |
 
 Queued prompts leave in arrival order after the agent ends its turn. A prompt leaves the queue as soon as the agent accepts it, even if the turn later stops or fails. The manager shows pending and parked prompts. Use `<CR>` to send one now, `e` to edit, `dd` to remove, `K` or `J` to move, `P` to move to the front, `p` to switch between parked and queued and `r` to resume a paused queue. A prompt that fails before the agent accepts it stays in the queue for review. `/rewind` and `/resume` must run immediately and cannot be queued.
 
 The composer hint shows context use as `ctx 7% 71k/1M` when the agent reports the context window size. It changes colour at 80% by default. Agents compact on their own when needed; during compaction the hint says `compacting…`, and the history records `compacted` or a failure when the agent finishes. Press `gC` in either the history or composer to request compaction. If the agent has not advertised a compact command, CodeCompanion warns and sends nothing. See [ACP Composer and Queue](/configuration/chat-buffer#acp-composer-and-queue) to change the warning threshold or compact before queued prompts.
+
+When an agent reports an active rate limit with a future reset time, the hint shows `limit · resets HH:MM` in local time before the keys. A limit error adds `gL para iniciar sesión con otra cuenta` to the error and pauses the queue. Press `gL` in the history or composer, or use [/login](/usage/chat-buffer/slash-commands#login), to choose a terminal login method. A successful login restarts the agent and reloads the current session with the queue paused. Cancelling or failing the login leaves the chat as it was.
+
+Press `gA` in a Claude Code or Codex chat to open the other agent with a draft handoff in its composer. Review or edit the draft before sending it. The draft keeps the first user message, the newest exchanges that fit in 12,000 characters and changed file paths from available rewind checkpoints. The original chat remains available.
 
 When a queued prompt is sent, `#buffer` and other configured editor context names expand, and `/file <path>` attaches an existing file. Other CodeCompanion slash commands are sent as text; CodeCompanion warns when you queue one. Run commands that open a picker directly before queuing the resulting prompt.
 

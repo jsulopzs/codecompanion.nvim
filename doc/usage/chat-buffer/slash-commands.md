@@ -24,6 +24,7 @@ Slash commands add context to the chat buffer and act on the chat itself. Type `
 | [/file-from-url](#file-from-url) | Download a file and add it |
 | [/fork](#fork) | Copy the chat into a new chat buffer |
 | [/help](#help) | Add content from Vim help tags |
+| [/login](#login) | Choose an ACP agent's terminal login method |
 | [/mcp](#mcp) | Start and stop MCP servers |
 | [/mcp-prompts](#mcp-prompts) | Add a prompt from an MCP server |
 | [/now](#now) | Insert the current date and time |
@@ -237,6 +238,10 @@ The _resume_ slash command lists your past sessions and restores the selected on
 ## /rules
 
 The _rules_ slash command adds a [rules](/usage/chat-buffer/rules) group to the chat buffer. It's also available in the [CLI prompt input](/usage/cli#slash-commands).
+
+## /login
+
+The _login_ slash command lists terminal login methods advertised by an ACP agent. Choose one to run its login command in a floating terminal over the chat. A successful login restarts the agent, reloads the same session and pauses the queue. Cancelling the selector or terminal leaves the chat unchanged. If the agent advertises no terminal methods, CodeCompanion shows a notice and leaves the chat unchanged.
 
 ## /rewind
 

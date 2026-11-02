@@ -80,6 +80,14 @@ require("codecompanion.interactions.chat").new({ adapter = "claude_code", acp_fo
 
 If the session can't be loaded or forked, the chat starts a new one.
 
+### Terminal Login and Limits
+
+CodeCompanion advertises `clientCapabilities.auth.terminal` and `_meta["terminal-auth"]` during initialisation. An agent can return terminal login methods with an executable command and arguments. The [/login](/usage/chat-buffer/slash-commands#login) command and `gL` run a chosen method in a floating terminal. After it succeeds, CodeCompanion restarts the agent and reloads the same session. It does not read or write credentials.
+
+Claude Code reports rate limit status in `usage_update._meta["_claude/rateLimit"]`. When the limit is active and its reset time is in the future, the composer shows the reset time in local time. CodeCompanion also advertises AIR `sessionFailure` so agents can report an actionable session error. A limit error pauses queued prompts and points to `gL`.
+
+Codex currently advertises agent handled authentication methods, without terminal commands, and does not include rate limit status in `usage_update`. Its AIR session failure can report a `login` action, but `gL` needs a terminal method from the agent before it can run one.
+
 ### Autonomous Turns
 
 Some agents continue working after a prompt has ended. Claude Code can resume when a background command finishes, a scheduled wakeup fires or a cron task runs. CodeCompanion shows those updates as a new agent turn, keeps the chat busy until it ends and preserves any unsent text below a new user header. Press `q` to cancel the turn.
