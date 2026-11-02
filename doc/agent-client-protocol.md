@@ -80,13 +80,13 @@ require("codecompanion.interactions.chat").new({ adapter = "claude_code", acp_fo
 
 If the session can't be loaded or forked, the chat starts a new one.
 
-### Terminal Login and Limits
+### Login and Limits
 
-CodeCompanion advertises `clientCapabilities.auth.terminal` and `_meta["terminal-auth"]` during initialisation. An agent can return terminal login methods with an executable command and arguments. The [/login](/usage/chat-buffer/slash-commands#login) command and `gL` run a chosen method in a floating terminal. After it succeeds, CodeCompanion restarts the agent and reloads the same session. It does not read or write credentials.
+CodeCompanion advertises `clientCapabilities.auth.terminal`, `_meta["terminal-auth"]` and URL elicitation during initialisation. The [/login](/usage/chat-buffer/slash-commands#login) command and `gL` list interactive methods. Terminal methods run in a floating terminal. Agent methods ask the agent to log out, when supported, then authenticate. The agent handles the browser login and any verification URL or code. After a successful login, CodeCompanion restarts the agent and reloads the same session. It does not read or write credentials.
 
 Claude Code reports rate limit status in `usage_update._meta["_claude/rateLimit"]`. When the limit is active and its reset time is in the future, the composer shows the reset time in local time. CodeCompanion also advertises AIR `sessionFailure` so agents can report an actionable session error. A limit error pauses queued prompts and points to `gL`.
 
-Codex currently advertises agent handled authentication methods, without terminal commands, and does not include rate limit status in `usage_update`. Its AIR session failure can report a `login` action, but `gL` needs a terminal method from the agent before it can run one.
+Codex advertises `chat-gpt` as an agent login method and can advertise `chat-gpt-device-code` when URL elicitation is available. `gL` excludes `api-key` because it needs a key. Codex does not include rate limit status in `usage_update`. Its AIR session failure can report a `login` action, which the composer links to `gL`. Cancelling a browser login keeps the chat open but cannot restore credentials already removed by the agent's logout.
 
 ### Autonomous Turns
 

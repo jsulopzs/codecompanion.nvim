@@ -24,7 +24,7 @@ Slash commands add context to the chat buffer and act on the chat itself. Type `
 | [/file-from-url](#file-from-url) | Download a file and add it |
 | [/fork](#fork) | Copy the chat into a new chat buffer |
 | [/help](#help) | Add content from Vim help tags |
-| [/login](#login) | Choose an ACP agent's terminal login method |
+| [/login](#login) | Choose an ACP agent's interactive login method |
 | [/mcp](#mcp) | Start and stop MCP servers |
 | [/mcp-prompts](#mcp-prompts) | Add a prompt from an MCP server |
 | [/now](#now) | Insert the current date and time |
@@ -241,7 +241,7 @@ The _rules_ slash command adds a [rules](/usage/chat-buffer/rules) group to the 
 
 ## /login
 
-The _login_ slash command lists terminal login methods advertised by an ACP agent. Choose one to run its login command in a floating terminal over the chat. A successful login restarts the agent, reloads the same session and pauses the queue. Cancelling the selector or terminal leaves the chat unchanged. If the agent advertises no terminal methods, CodeCompanion shows a notice and leaves the chat unchanged.
+The _login_ slash command lists interactive login methods advertised by an ACP agent. Terminal methods run in a floating terminal over the chat. Agent methods let the agent handle the browser login and any verification URL or code. A successful login restarts the agent, reloads the same session and pauses the queue. Cancelling or failing the login keeps the chat open. If the agent advertises no interactive methods, CodeCompanion shows a notice. An agent logout may already have removed your previous credentials when you cancel a browser login.
 
 ## /rewind
 
