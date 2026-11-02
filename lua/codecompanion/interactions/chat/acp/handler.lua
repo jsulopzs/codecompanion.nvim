@@ -54,6 +54,11 @@ end
 ---Finish an autonomous turn and restore the user's draft
 ---@param opts { session_id: string, cause?: string, stopped?: boolean }
 function ACPHandler:finish_autonomous_turn(opts)
+  local output = table.concat(self.output or {}, "")
+  if output ~= "" then
+    self.chat.acp_transcript = self.chat.acp_transcript or {}
+    table.insert(self.chat.acp_transcript, { role = "assistant", content = output })
+  end
   self.chat._acp_stop_reason = opts.stopped and "canceled" or "end_turn"
   self:handle_complete({ status = opts.stopped and "stopped" or nil })
   if self._draft and vim.api.nvim_buf_is_valid(self.chat.bufnr) then
@@ -118,6 +123,7 @@ end
 ---@param payload table The payload to send to the LLM
 ---@return nil
 function ACPHandler:submit(payload)
+  self.chat.acp_session_failure = nil
   local request = {}
   request.cancel = function()
     request.cancelled = true
@@ -337,7 +343,7 @@ function ACPHandler:bind_updates(prompt)
         or output:lower():match("rate.?limit")
         or output:lower():match("usage.?limit")
         or output:lower():match("quota")
-      if stop_reason == "refusal" or stop_reason == "error" then
+      if stop_reason == "refusal" or stop_reason == "error" or (failure and failure.category == "limit") then
         self.chat.status = "error"
         if is_limit then
           self.chat:add_buf_message({

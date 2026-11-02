@@ -65,4 +65,25 @@ T["Handoff"]["includes changed files and opens the other agent with an unsent dr
   h.is_true(result[4])
 end
 
+T["Handoff"]["opens Claude from a Codex chat and keeps the source unchanged"] = function()
+  local result = child.lua([[
+    local handoff = require("codecompanion.interactions.chat.acp.handoff")
+    local new_buffer = vim.api.nvim_create_buf(false, true)
+    local target
+    package.loaded["agent_sessions.codecompanion"] = {
+      chat = function(opts)
+        target = opts.agent
+        return { composer = { bufnr = new_buffer, update_height = function() end, focus = function() end } }
+      end,
+    }
+    local source = { adapter = { name = "codex" }, acp_transcript = { { role = "user", content = "Fix this" } } }
+    handoff.open(source)
+    local draft = table.concat(vim.api.nvim_buf_get_lines(new_buffer, 0, -1, false), "\n")
+    return { target, draft, source.acp_transcript[1].content }
+  ]])
+  h.eq("claude", result[1])
+  h.expect_contains("empezó con Codex", result[2])
+  h.eq("Fix this", result[3])
+end
+
 return T
