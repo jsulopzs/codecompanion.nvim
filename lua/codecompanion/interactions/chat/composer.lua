@@ -8,6 +8,16 @@ local ns = api.nvim_create_namespace("codecompanion.composer.hints")
 local Composer = {}
 Composer.__index = Composer
 
+local function compact_number(value)
+  if value >= 1000000 then
+    return string.format("%.0fM", value / 1000000)
+  end
+  if value >= 1000 then
+    return string.format("%.0fk", value / 1000)
+  end
+  return tostring(value)
+end
+
 ---@param chat CodeCompanion.Chat
 ---@return table
 function Composer.new(chat)
@@ -170,9 +180,22 @@ function Composer:update_status()
     keys.manager,
     busy and " · q stop" or ""
   )
+  local segments = { { hint, "Comment" } }
+  local usage = self.chat.context_usage
+  if usage and type(usage.size) == "number" and usage.size > 0 and type(usage.used) == "number" then
+    local ratio = usage.used / usage.size
+    local group = ratio >= config.interactions.chat.composer.context_warn and "WarningMsg" or "Comment"
+    table.insert(
+      segments,
+      {
+        string.format(" · ctx %.0f%% %s/%s", ratio * 100, compact_number(usage.used), compact_number(usage.size)),
+        group,
+      }
+    )
+  end
   api.nvim_buf_clear_namespace(self.bufnr, ns, 0, -1)
   api.nvim_buf_set_extmark(self.bufnr, ns, api.nvim_buf_line_count(self.bufnr) - 1, 0, {
-    virt_lines = { { { hint, "Comment" } } },
+    virt_lines = { segments },
   })
 end
 

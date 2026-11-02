@@ -117,6 +117,34 @@ T["Composer"]["shows active task and schedule counts only when present"] = funct
   h.expect_contains("1 task · 1 scheduled", result[2])
 end
 
+T["Composer"]["shows context usage and updates it after a new usage report"] = function()
+  local result = child.lua([[
+    local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })
+    local connection = require("codecompanion.acp").new({ adapter = chat.adapter, chat = chat, session_id = "usage-session" })
+    local function segments()
+      local marks = vim.api.nvim_buf_get_extmarks(chat.composer.bufnr, -1, 0, -1, { details = true })
+      return marks[#marks][4].virt_lines[1]
+    end
+    local before = segments()
+    local function report(used, size)
+      connection:handle_incoming_request_or_notification({ method = "session/update", params = { sessionId = "usage-session", update = { sessionUpdate = "usage_update", used = used, size = size } } })
+    end
+    report(71407, 1000000)
+    local first = segments()
+    report(850000, 1000000)
+    local warned = segments()
+    report(120000, 1000000)
+    local after = segments()
+    return { before = #before, first = first[2], warned = warned[2], after = after[2], tokens = chat.tokens, used = chat.context_usage.used }
+  ]])
+  h.eq(1, result.before)
+  h.eq({ " · ctx 7% 71k/1M", "Comment" }, result.first)
+  h.eq({ " · ctx 85% 850k/1M", "WarningMsg" }, result.warned)
+  h.eq({ " · ctx 12% 120k/1M", "Comment" }, result.after)
+  h.eq(120000, result.tokens)
+  h.eq(120000, result.used)
+end
+
 T["Composer"]["submits text as a visible user message"] = function()
   local result = child.lua([[
     local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })

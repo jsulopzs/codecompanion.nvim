@@ -117,6 +117,7 @@ local defaults = {
         min_height = 3,
         max_height = 10,
         write_in_history = false,
+        context_warn = 0.8,
         keymaps = { send = "<C-s>", queue = "<M-CR>", park = "gp", manager = "gQ" },
       },
       queue = { save = true },

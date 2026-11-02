@@ -1040,6 +1040,10 @@ local DISPATCH = {
       local chat = self:get_chat(m.params.sessionId)
       if chat and m.params.update.used then
         chat.tokens = m.params.update.used
+        chat.context_usage = { used = m.params.update.used, size = m.params.update.size }
+        if chat.composer then
+          chat.composer:update_status()
+        end
       end
     elseif self._loading_session and self._on_session_update then
       self._on_session_update(m.params.update)
