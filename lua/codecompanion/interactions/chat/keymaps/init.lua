@@ -307,6 +307,13 @@ M.login = {
   end,
 }
 
+M.handoff = {
+  desc = "Continue with the other agent",
+  callback = function(chat)
+    require("codecompanion.interactions.chat.acp.handoff").open(chat)
+  end,
+}
+
 M.regenerate = {
   callback = function(chat)
     chat:regenerate()

@@ -118,7 +118,15 @@ local defaults = {
         max_height = 10,
         write_in_history = false,
         context_warn = 0.8,
-        keymaps = { send = "<C-s>", queue = "<M-CR>", park = "gp", manager = "gQ", compact = "gC", login = "gL" },
+        keymaps = {
+          send = "<C-s>",
+          queue = "<M-CR>",
+          park = "gp",
+          manager = "gQ",
+          compact = "gC",
+          login = "gL",
+          handoff = "gA",
+        },
       },
       queue = { save = true, compact_before = nil },
       tasks = { enabled = true, refresh_ms = 2000 },
@@ -838,6 +846,12 @@ If you are providing code changes, use the edit_file tool (if available to you) 
           index = 25,
           callback = "keymaps.login",
           description = "Log in with another account",
+        },
+        handoff = {
+          modes = { n = "gA" },
+          index = 26,
+          callback = "keymaps.handoff",
+          description = "Continue with the other agent",
         },
         -- Note: This is only available during streaming
         _btw = {

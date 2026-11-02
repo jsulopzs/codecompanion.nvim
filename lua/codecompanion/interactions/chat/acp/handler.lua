@@ -322,6 +322,16 @@ function ACPHandler:bind_updates(prompt)
     end)
     :on_complete(function(stop_reason)
       local output = table.concat(self.output or {}, "")
+      local connection = self.chat.acp_connection
+      local turns = connection and connection.turns and connection:turns(connection.session_id) or {}
+      local turn = turns[#turns]
+      if turn then
+        self.chat.acp_transcript = self.chat.acp_transcript or {}
+        table.insert(self.chat.acp_transcript, { role = "user", content = turn.prompt })
+        if output ~= "" then
+          table.insert(self.chat.acp_transcript, { role = "assistant", content = output })
+        end
+      end
       local failure = self.chat.acp_session_failure
       local is_limit = (failure and failure.category == "limit")
         or output:lower():match("rate.?limit")

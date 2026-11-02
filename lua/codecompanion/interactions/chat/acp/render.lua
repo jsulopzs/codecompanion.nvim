@@ -9,6 +9,7 @@ local M = {}
 ---@return nil
 function M.restore_session(chat, updates)
   chat:clear()
+  chat.acp_transcript = {}
 
   local user_chunks = {}
   local llm_chunks = {}
@@ -17,6 +18,7 @@ function M.restore_session(chat, updates)
     if #user_chunks > 0 then
       local text = table.concat(user_chunks)
       chat:add_buf_message({ role = config.constants.USER_ROLE, content = text })
+      table.insert(chat.acp_transcript, { role = "user", content = text })
       user_chunks = {}
     end
   end
@@ -28,6 +30,7 @@ function M.restore_session(chat, updates)
         { role = config.constants.LLM_ROLE, content = text },
         { type = chat.MESSAGE_TYPES.LLM_MESSAGE }
       )
+      table.insert(chat.acp_transcript, { role = "assistant", content = text })
       llm_chunks = {}
     end
   end
