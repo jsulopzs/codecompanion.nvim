@@ -48,6 +48,9 @@ function Composer.new(chat)
   map("n", keys.compact, function()
     chat:compact_context()
   end)
+  map("n", keys.login, function()
+    require("codecompanion.interactions.chat.acp.login").pick(chat)
+  end)
   map("n", "q", function()
     if chat.current_request then
       chat:stop()
@@ -189,13 +192,14 @@ function Composer:update_status()
   end
   table.insert(segments, {
     string.format(
-      " · %s %s · %s queue · %s park · %s manage · %s compact%s",
+      " · %s %s · %s queue · %s park · %s manage · %s compact · %s login%s",
       keys.send,
       busy and "correct" or "send",
       keys.queue,
       keys.park,
       keys.manager,
       keys.compact,
+      keys.login,
       busy and " · q stop" or ""
     ),
     "Comment",

@@ -150,6 +150,77 @@ T["ACP Connection"]["does not launch a terminal login when Claude advertises one
   h.eq({}, methods)
 end
 
+T["ACP Connection"]["selects only terminal login methods and runs the advertised command"] = function()
+  local result = child.lua([[
+    local login = require("codecompanion.interactions.chat.acp.login")
+    local choices, launched
+    local select = vim.ui.select
+    vim.ui.select = function(items, _, callback)
+      choices = vim.tbl_map(function(item) return item.name end, items)
+      callback(items[1])
+    end
+    login.run = function(opts) launched = opts.command end
+    login.pick({
+      acp_connection = {
+        _agent_info = { authMethods = {
+          { id = "api-key", name = "API key", type = "agent" },
+          { id = "claude-ai-login", name = "Claude Subscription", type = "terminal", _meta = { ["terminal-auth"] = { command = "node", args = { "agent", "--cli", "auth", "login" } } } },
+        } },
+        session_id = "session-1",
+        can_load_session = function() return true end,
+      },
+    })
+    vim.ui.select = select
+    return { choices = choices, launched = launched }
+  ]])
+  h.eq({ "Claude Subscription" }, result.choices)
+  h.eq({ "node", "agent", "--cli", "auth", "login" }, result.launched)
+end
+
+T["ACP Connection"]["leaves the chat alone when login selection is cancelled"] = function()
+  local result = child.lua([[
+    local login = require("codecompanion.interactions.chat.acp.login")
+    local selected = false
+    local select = vim.ui.select
+    vim.ui.select = function(_, _, callback) callback(nil) end
+    login.run = function() selected = true end
+    local chat = { acp_connection = {
+      _agent_info = { authMethods = { { id = "login", type = "terminal" } } },
+      session_id = "session-1",
+      can_load_session = function() return true end,
+    } }
+    login.pick(chat)
+    vim.ui.select = select
+    return { selected, chat.acp_connection.session_id }
+  ]])
+  h.eq({ false, "session-1" }, result)
+end
+
+T["ACP Connection"]["restarts the agent and reloads the same session after login"] = function()
+  local result = child.lua([[
+    local connection = create_test_connection()
+    local killed, loaded
+    connection.chat = {}
+    connection.session_id = "session-1"
+    connection._agent_info = { agentCapabilities = { loadSession = true } }
+    connection._turns["session-1"] = { { prompt = "first", checkpoint = { tree = "before" } } }
+    connection._state.handle = { kill = function() killed = true end }
+    connection.connect_and_authenticate = function() return true end
+    local restore = require("codecompanion.interactions.chat.acp.restore")
+    local original = restore.session
+    restore.session = function(_, session_id)
+      loaded = session_id
+      connection.session_id = session_id
+      connection._turns[session_id] = { { prompt = "first" } }
+      return true
+    end
+    local ok = connection:restart_after_login()
+    restore.session = original
+    return { ok, killed, loaded, connection._turns["session-1"][1].checkpoint.tree }
+  ]])
+  h.eq({ true, true, "session-1", "before" }, result)
+end
+
 T["ACP Connection"]["can handle real initialize response"] = function()
   child.lua([[
     connection = create_init_connection()

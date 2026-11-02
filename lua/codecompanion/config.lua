@@ -118,7 +118,7 @@ local defaults = {
         max_height = 10,
         write_in_history = false,
         context_warn = 0.8,
-        keymaps = { send = "<C-s>", queue = "<M-CR>", park = "gp", manager = "gQ", compact = "gC" },
+        keymaps = { send = "<C-s>", queue = "<M-CR>", park = "gp", manager = "gQ", compact = "gC", login = "gL" },
       },
       queue = { save = true, compact_before = nil },
       tasks = { enabled = true, refresh_ms = 2000 },
@@ -396,6 +396,16 @@ If you are providing code changes, use the edit_file tool (if available to you) 
         },
       },
       slash_commands = {
+        ["login"] = {
+          description = "Log in with an ACP agent",
+          enabled = function(opts)
+            return opts.adapter and opts.adapter.type == "acp"
+          end,
+          callback = function(chat)
+            require("codecompanion.interactions.chat.acp.login").pick(chat)
+          end,
+          opts = { contains_code = false },
+        },
         ["acp_session_options"] = {
           path = "interactions.chat.slash_commands.builtin.acp_session_options",
           description = "Change ACP session config options like mode and reasoning level",
@@ -822,6 +832,12 @@ If you are providing code changes, use the edit_file tool (if available to you) 
           index = 24,
           callback = "keymaps.rewind",
           description = "Rewind to an earlier message",
+        },
+        login = {
+          modes = { n = "gL" },
+          index = 25,
+          callback = "keymaps.login",
+          description = "Log in with another account",
         },
         -- Note: This is only available during streaming
         _btw = {

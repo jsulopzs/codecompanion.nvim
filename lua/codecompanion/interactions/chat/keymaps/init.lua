@@ -300,6 +300,13 @@ M.rewind = {
   end,
 }
 
+M.login = {
+  desc = "Log in with another account",
+  callback = function(chat)
+    require("codecompanion.interactions.chat.acp.login").pick(chat)
+  end,
+}
+
 M.regenerate = {
   callback = function(chat)
     chat:regenerate()

@@ -695,7 +695,9 @@ function Connection:start_agent_process()
   self._rpc_log = log.new_response_file()
   log:info("[acp] RPC log: %s", self._rpc_log.path)
 
-  local ok, sysobj = pcall(
+  local sysobj
+  local ok
+  ok, sysobj = pcall(
     self.methods.job,
     self.adapter_modified.command,
     {
@@ -716,7 +718,9 @@ function Connection:start_agent_process()
       end),
     },
     self.methods.schedule_wrap(function(obj)
-      self:handle_process_exit(obj.code, obj.signal)
+      if self._state.handle == sysobj then
+        self:handle_process_exit(obj.code, obj.signal)
+      end
     end)
   )
 
@@ -838,6 +842,31 @@ end
 ---@return nil
 function Connection:disconnect()
   assert(self._state.handle):kill("sigterm")
+end
+
+---Restart the agent and load the current session after a successful terminal login
+---@return boolean
+function Connection:restart_after_login()
+  local session_id = self.session_id
+  if not session_id or not self:can_load_session() or not self.chat then
+    return false
+  end
+
+  local previous_turns = self:turns(session_id)
+  self._state.handle:kill("sigterm")
+  self:handle_process_exit(0, 0)
+  if not self:connect_and_authenticate() then
+    return false
+  end
+  if not require("codecompanion.interactions.chat.acp.restore").session(self.chat, session_id) then
+    return false
+  end
+  for index, turn in ipairs(self:turns(session_id)) do
+    if previous_turns[index] then
+      turn.checkpoint = previous_turns[index].checkpoint
+    end
+  end
+  return true
 end
 
 ---Process the output
@@ -1363,6 +1392,7 @@ function Connection:handle_process_exit(code, signal)
 
   -- Always clean up state
   self.adapter_modified = nil
+  self._state.handle = nil
   self._authenticated = false
   self._initialized = false
   self._pending_callbacks = {}
