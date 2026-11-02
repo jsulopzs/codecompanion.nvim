@@ -86,6 +86,19 @@ T["ACP Connection"]["can create connection with adapter"] = function()
   h.eq(result.authenticated, false)
 end
 
+T["ACP Connection"]["returns an agent error to a waiting login request"] = function()
+  local result = child.lua([[
+    local connection = create_test_connection({ schedule = function(callback) callback() end })
+    local received
+    connection._pending_callbacks[7] = function(value, error_response)
+      received = { value == nil, error_response.message }
+    end
+    connection:store_rpc_response({ id = 7, error = { message = "Already authenticated" } })
+    return received
+  ]])
+  h.eq({ true, "Already authenticated" }, result)
+end
+
 T["ACP Connection"]["advertises form elicitation as a JSON object"] = function()
   local capabilities = child.lua([[
     local adapter = vim.tbl_extend("force", test_adapter, { commands = { default = { "node", "test-acp-cli" } } })
@@ -247,7 +260,7 @@ T["ACP Connection"]["selects Codex browser login methods without listing API key
   h.eq("chat-gpt", result[2])
 end
 
-T["ACP Connection"]["logs out and authenticates before reloading an agent login"] = function()
+T["ACP Connection"]["authenticates without logging out before reloading an agent login"] = function()
   local result = child.lua([[
     local login = require("codecompanion.interactions.chat.acp.login")
     local calls = {}
@@ -271,39 +284,138 @@ T["ACP Connection"]["logs out and authenticates before reloading an agent login"
     login.run_agent({ chat = chat, method = { id = "chat-gpt" } })
     return { calls, connection.adapter.defaults.auth_method, chat._acp_login == nil }
   ]])
-  h.eq({ { "logout" }, { "authenticate", "chat-gpt" }, { "pause", "login" }, { "restart" } }, result[1])
+  h.eq({ { "authenticate", "chat-gpt" }, { "pause", "login" }, { "restart" } }, result[1])
   h.eq("chat-gpt", result[2])
   h.is_true(result[3])
+end
+
+T["ACP Connection"]["logs out only after the user confirms replacing an active session"] = function()
+  local result = child.lua([[
+    local login = require("codecompanion.interactions.chat.acp.login")
+    local calls = {}
+    local original_select = vim.ui.select
+    vim.ui.select = function(items, _, callback)
+      table.insert(calls, { "confirm", items[1] })
+      callback(items[1])
+    end
+    local connection = {
+      _agent_info = { agentCapabilities = { auth = { logout = {} } } },
+      adapter = { defaults = {} },
+      send_rpc_request = function(_, method, params)
+        table.insert(calls, { method, params.methodId })
+        if #calls == 1 then return nil, { message = "Already authenticated" } end
+        return {}
+      end,
+      restart_after_login = function() table.insert(calls, { "restart" }); return true end,
+    }
+    local chat = {
+      acp_connection = connection,
+      _set_status = function() end, _clear_status = function() end,
+      queue = { pause = function() table.insert(calls, { "pause" }) end },
+    }
+    login.run_agent({ chat = chat, method = { id = "chat-gpt" } })
+    vim.ui.select = original_select
+    return calls
+  ]])
+  h.eq({
+    { "authenticate", "chat-gpt" },
+    { "confirm", "Cerrar la sesión actual y continuar" },
+    { "logout" },
+    { "authenticate", "chat-gpt" },
+    { "pause" },
+    { "restart" },
+  }, result)
+end
+
+T["ACP Connection"]["keeps the current account when replacement is cancelled"] = function()
+  local result = child.lua([[
+    local login = require("codecompanion.interactions.chat.acp.login")
+    local calls = {}
+    local original_select = vim.ui.select
+    vim.ui.select = function(_, _, callback) callback("Cancelar") end
+    local connection = {
+      _agent_info = { agentCapabilities = { auth = { logout = {} } } },
+      send_rpc_request = function(_, method)
+        table.insert(calls, method)
+        return nil, { message = "Already logged in" }
+      end,
+      restart_after_login = function() error("must not restart") end,
+    }
+    local chat = {
+      acp_connection = connection,
+      _set_status = function() end, _clear_status = function() end,
+      queue = { pause = function() error("must not pause") end },
+    }
+    login.run_agent({ chat = chat, method = { id = "chat-gpt" } })
+    vim.ui.select = original_select
+    return { calls, chat._acp_login == nil }
+  ]])
+  h.eq({ "authenticate" }, result[1])
+  h.is_true(result[2])
+end
+
+T["ACP Connection"]["does not log out when the login is cancelled during replacement confirmation"] = function()
+  local result = child.lua([[
+    local login = require("codecompanion.interactions.chat.acp.login")
+    local original_select, choose = vim.ui.select
+    vim.ui.select = function(_, _, callback) choose = callback end
+    local calls = {}
+    local chat = {
+      acp_connection = {
+        _agent_info = { agentCapabilities = { auth = { logout = {} } } },
+        send_rpc_request = function(_, method)
+          table.insert(calls, method)
+          return nil, { message = "Already authenticated" }
+        end,
+        restart_after_login = function() error("must not restart") end,
+      },
+      _set_status = function() end, _clear_status = function() end,
+      queue = { pause = function() error("must not pause") end },
+    }
+    login.run_agent({ chat = chat, method = { id = "chat-gpt" } })
+    login.cancel(chat)
+    choose("Cerrar la sesión actual y continuar")
+    vim.ui.select = original_select
+    return { calls, chat._acp_login == nil }
+  ]])
+  h.eq({ "authenticate" }, result[1])
+  h.is_true(result[2])
 end
 
 T["ACP Connection"]["does not restart the chat when an agent login fails"] = function()
   local result = child.lua([[
     local login = require("codecompanion.interactions.chat.acp.login")
-    local restarted, cleared = false, false
+    local restarted, cleared, calls = false, false, {}
     local chat = {
       acp_connection = {
-        _agent_info = { agentCapabilities = { auth = {} } },
-        send_rpc_request = function() return nil end,
+        _agent_info = { agentCapabilities = { auth = { logout = {} } } },
+        send_rpc_request = function(_, method)
+          table.insert(calls, method)
+          return nil, { message = "Network unavailable" }
+        end,
         restart_after_login = function() restarted = true end,
       },
       _set_status = function() end, _clear_status = function() cleared = true end,
       queue = { pause = function() error("queue must stay as it was") end },
     }
     login.run_agent({ chat = chat, method = { id = "chat-gpt" } })
-    return { restarted, cleared, chat._acp_login == nil }
+    return { restarted, cleared, chat._acp_login == nil, calls }
   ]])
-  h.eq({ false, true, true }, result)
+  h.eq({ false, true, true, { "authenticate" } }, result)
 end
 
 T["ACP Connection"]["cancels an agent login without restarting the chat"] = function()
   local result = child.lua([[
     local login = require("codecompanion.interactions.chat.acp.login")
     local async = require("codecompanion.utils.async")
-    local resume, restarted
+    local resume, restarted, calls = nil, nil, {}
     local chat = {
       acp_connection = {
-        _agent_info = { agentCapabilities = { auth = {} } },
-        send_rpc_request = function() return async.wait(function(callback) resume = callback end) end,
+        _agent_info = { agentCapabilities = { auth = { logout = {} } } },
+        send_rpc_request = function(_, method)
+          table.insert(calls, method)
+          return async.wait(function(callback) resume = callback end)
+        end,
         restart_after_login = function() restarted = true end,
       },
       _set_status = function() end, _clear_status = function() end,
@@ -312,9 +424,9 @@ T["ACP Connection"]["cancels an agent login without restarting the chat"] = func
     login.run_agent({ chat = chat, method = { id = "chat-gpt" } })
     login.cancel(chat)
     resume({})
-    return { restarted == nil, chat._acp_login == nil }
+    return { restarted == nil, chat._acp_login == nil, calls }
   ]])
-  h.eq({ true, true }, result)
+  h.eq({ true, true, { "authenticate" } }, result)
 end
 
 T["ACP Connection"]["shows the URL and code supplied by an agent login"] = function()

@@ -737,7 +737,7 @@ end
 ---If called inside an async coroutine, yields until the response arrives, or fallback to sync
 ---@param method string
 ---@param params table
----@return table|nil
+---@return table|nil, table|nil
 function Connection:send_rpc_request(method, params)
   if not self._state.handle then
     return nil
@@ -825,7 +825,7 @@ end
 
 ---Wait for a specific response ID
 ---@param id number
----@return nil
+---@return table|nil, table|nil
 function Connection:wait_for_rpc_response(id)
   local start_time = uv.hrtime()
   local timeout = (self.adapter_modified.defaults.timeout or TIMEOUTS.DEFAULT) * 1e6 -- Nanoseconds to milliseconds
@@ -836,7 +836,7 @@ function Connection:wait_for_rpc_response(id)
     if self.pending_responses[id] then
       local result, err = unpack(self.pending_responses[id])
       self.pending_responses[id] = nil
-      return err and nil or result
+      return err and nil or result, err
     end
   end
 
@@ -964,7 +964,7 @@ function Connection:store_rpc_response(response)
   if cb then
     self._pending_callbacks[response.id] = nil
     self.methods.schedule(function()
-      cb((not response.error) and response.result or nil)
+      cb((not response.error) and response.result or nil, response.error)
     end)
     return forward_error_to_prompt()
   end

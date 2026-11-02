@@ -104,6 +104,56 @@ function M.cancel(chat)
   end
 end
 
+---Check whether the agent rejected login because another session is active
+---@param error_response table|nil
+---@return boolean
+local function requires_logout(error_response)
+  if type(error_response) ~= "table" then
+    return false
+  end
+  local detail = type(error_response.data) == "table" and error_response.data.error or nil
+  local message = (tostring(error_response.message or "") .. " " .. tostring(detail or "")):lower()
+  return message:find("already authenticated", 1, true) ~= nil
+    or message:find("already logged in", 1, true) ~= nil
+    or message:find("already signed in", 1, true) ~= nil
+    or message:find("session already active", 1, true) ~= nil
+end
+
+---Ask before replacing the agent's current account
+---@param opts { chat: CodeCompanion.Chat, login: table }
+---@return boolean
+local function confirm_logout(opts)
+  local choice = async.wait(function(callback)
+    vim.ui.select({ "Cerrar la sesión actual y continuar", "Cancelar" }, {
+      kind = "codecompanion.nvim",
+      prompt = "El agente requiere cerrar la sesión actual",
+    }, callback)
+  end)
+  return choice == "Cerrar la sesión actual y continuar" and opts.chat._acp_login == opts.login
+end
+
+---Finish an agent login, leaving the chat open if it failed or was cancelled
+---@param opts { chat: CodeCompanion.Chat, connection: CodeCompanion.ACP.Connection, login: table, method: table, authenticated: table|nil }
+---@return nil
+local function finish_agent_login(opts)
+  if opts.chat._acp_login ~= opts.login then
+    return
+  end
+  opts.chat._acp_login = nil
+  opts.chat:_clear_status()
+  if opts.login.cancelled then
+    return
+  end
+  if not opts.authenticated then
+    return utils.notify("Login failed or was cancelled", vim.log.levels.ERROR)
+  end
+  opts.connection.adapter.defaults.auth_method = opts.method.id
+  opts.chat.queue:pause("login")
+  if not opts.connection:restart_after_login() then
+    utils.notify("Login succeeded, but the session could not be reloaded", vim.log.levels.ERROR)
+  end
+end
+
 ---Ask the agent to start a browser login and reload the session on success
 ---@param opts { chat: CodeCompanion.Chat, method: table }
 ---@return nil
@@ -115,35 +165,33 @@ function M.run_agent(opts)
   chat:_set_status({ key = "auth", message = "esperando el login en el navegador… (gL cancela)" })
 
   async.sync(function()
+    local authenticated, error_response =
+      connection:send_rpc_request(methods.AUTHENTICATE, { methodId = opts.method.id })
     local capabilities = connection._agent_info.agentCapabilities or {}
-    if capabilities.auth and capabilities.auth.logout then
-      local logged_out = connection:send_rpc_request(methods.LOGOUT, {})
-      if not logged_out then
-        if chat._acp_login == login then
-          chat._acp_login = nil
-          chat:_clear_status()
-          utils.notify("Could not log out before signing in", vim.log.levels.ERROR)
+    if
+      not authenticated
+      and not login.cancelled
+      and requires_logout(error_response)
+      and capabilities.auth
+      and capabilities.auth.logout
+    then
+      if confirm_logout({ chat = chat, login = login }) then
+        local logged_out = connection:send_rpc_request(methods.LOGOUT, {})
+        if logged_out and not login.cancelled then
+          chat:_set_status({ key = "auth", message = "esperando el login en el navegador… (gL cancela)" })
+          authenticated = connection:send_rpc_request(methods.AUTHENTICATE, { methodId = opts.method.id })
         end
-        return
+      else
+        login.cancelled = true
       end
     end
-    if login.cancelled then
-      return
-    end
-    local authenticated = connection:send_rpc_request(methods.AUTHENTICATE, { methodId = opts.method.id })
-    if chat._acp_login ~= login then
-      return
-    end
-    chat._acp_login = nil
-    chat:_clear_status()
-    if not authenticated then
-      return utils.notify("Login failed or was cancelled", vim.log.levels.ERROR)
-    end
-    connection.adapter.defaults.auth_method = opts.method.id
-    chat.queue:pause("login")
-    if not connection:restart_after_login() then
-      utils.notify("Login succeeded, but the session could not be reloaded", vim.log.levels.ERROR)
-    end
+    finish_agent_login({
+      chat = chat,
+      connection = connection,
+      login = login,
+      method = opts.method,
+      authenticated = authenticated,
+    })
   end)()
 end
 
