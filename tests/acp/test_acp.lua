@@ -119,7 +119,7 @@ T["ACP Connection"]["advertises AIR async tasks without changing adapter capabil
       original = test_adapter.parameters.clientCapabilities._meta,
     }
   ]])
-  h.eq({ version = 1, capabilities = { "asyncTasks" } }, result.air)
+  h.eq({ version = 1, capabilities = { "asyncTasks", "sessionFailure" } }, result.air)
   h.eq({ monitors = true, schedules = true, output = true }, result.details)
   h.is_true(result.output)
   h.is_false(result.schedules)

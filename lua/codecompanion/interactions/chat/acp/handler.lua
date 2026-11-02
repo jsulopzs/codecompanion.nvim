@@ -321,7 +321,21 @@ function ACPHandler:bind_updates(prompt)
       self:handle_permission_request(request)
     end)
     :on_complete(function(stop_reason)
-      if self.chat.queue then
+      local output = table.concat(self.output or {}, "")
+      local failure = self.chat.acp_session_failure
+      local is_limit = (failure and failure.category == "limit")
+        or output:lower():match("rate.?limit")
+        or output:lower():match("usage.?limit")
+        or output:lower():match("quota")
+      if stop_reason == "refusal" or stop_reason == "error" then
+        self.chat.status = "error"
+        if is_limit then
+          self.chat:add_buf_message({
+            role = config.constants.LLM_ROLE,
+            content = "\ngL para iniciar sesión con otra cuenta\n",
+          })
+        end
+      elseif self.chat.queue then
         self.chat.queue:mark_accepted()
       end
       self.chat._acp_stop_reason = stop_reason or "end_turn"
@@ -587,6 +601,17 @@ function ACPHandler:handle_error(error)
   self:_clear_permission_queue()
 
   self.chat.status = "error"
+  local failure = self.chat.acp_session_failure
+  local lower_error = error:lower()
+  if
+    (failure and failure.category == "limit")
+    or lower_error:match("rate.?limit")
+    or lower_error:match("usage.?limit")
+    or lower_error:match("quota")
+    or lower_error:match("429")
+  then
+    error = error .. "\n\ngL para iniciar sesión con otra cuenta"
+  end
   log:error("[ACP::Handler] %s", error)
 
   self.chat:add_buf_message(

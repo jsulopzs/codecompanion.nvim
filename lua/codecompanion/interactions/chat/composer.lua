@@ -190,6 +190,15 @@ function Composer:update_status()
       group,
     })
   end
+  local rate_limit = self.chat.rate_limit
+  if
+    rate_limit
+    and rate_limit.status ~= "allowed"
+    and type(rate_limit.resetsAt) == "number"
+    and rate_limit.resetsAt > os.time()
+  then
+    table.insert(segments, { " · limit · resets " .. os.date("%H:%M", rate_limit.resetsAt), "WarningMsg" })
+  end
   table.insert(segments, {
     string.format(
       " · %s %s · %s queue · %s park · %s manage · %s compact · %s login%s",

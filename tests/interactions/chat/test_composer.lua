@@ -150,6 +150,26 @@ T["Composer"]["shows context usage and updates it after a new usage report"] = f
   h.eq(50000, result.used)
 end
 
+T["Composer"]["shows an active rate limit before keys and hides it after reset"] = function()
+  local result = child.lua([[
+    local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })
+    local connection = require("codecompanion.acp").new({ adapter = chat.adapter, chat = chat, session_id = "limit-session" })
+    local function report(rate_limit)
+      connection:handle_incoming_request_or_notification({ method = "session/update", params = { sessionId = "limit-session", update = { sessionUpdate = "usage_update", _meta = { ["_claude/rateLimit"] = rate_limit } } } })
+      local marks = vim.api.nvim_buf_get_extmarks(chat.composer.bufnr, -1, 0, -1, { details = true })
+      return marks[#marks][4].virt_lines[1]
+    end
+    local future = os.time() + 3600
+    local limited = report({ status = "rejected", resetsAt = future })
+    local expired = report({ status = "rejected", resetsAt = os.time() - 1 })
+    return { limited[2], limited[3][1], #expired }
+  ]])
+  h.eq("WarningMsg", result[1][2])
+  h.expect_contains(" · limit · resets ", result[1][1])
+  h.is_true(vim.startswith(result[2], " · <C-s> send"))
+  h.eq(2, result[3])
+end
+
 T["Composer"]["shows one history notice for a completed compaction"] = function()
   local result = child.lua([[
     local chat = h.setup_chat_buffer({ display = { chat = { stream_interval = 0 } } }, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })

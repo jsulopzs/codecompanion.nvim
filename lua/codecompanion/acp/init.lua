@@ -222,7 +222,7 @@ function Connection:_initialize()
   parameters.clientCapabilities._meta["terminal-auth"] = true
   parameters.clientCapabilities._meta.jetbrains = parameters.clientCapabilities._meta.jetbrains or {}
   -- AIR asyncTasks is an interim extension until ACP v2 supports updates outside a prompt.
-  parameters.clientCapabilities._meta.jetbrains.air = { version = 1, capabilities = { "asyncTasks" } }
+  parameters.clientCapabilities._meta.jetbrains.air = { version = 1, capabilities = { "asyncTasks", "sessionFailure" } }
   parameters.clientCapabilities._meta.asyncTaskDetails = { monitors = true, schedules = true, output = true }
   local initialized = self:send_rpc_request(METHODS.INITIALIZE, parameters)
   if not initialized then
@@ -1085,17 +1085,28 @@ local DISPATCH = {
     elseif m.params.update and m.params.update.sessionUpdate == "session_info_update" then
       -- Ref: https://agentclientprotocol.com/rfds/session-info-update
       local chat = self:get_chat(m.params.sessionId)
+      local air = m.params.update._meta and m.params.update._meta.jetbrains and m.params.update._meta.jetbrains.air
+      if chat and air and air.sessionFailure then
+        chat.acp_session_failure = air.sessionFailure
+        if chat.composer then
+          chat.composer:update_status()
+        end
+      end
       if chat and m.params.update.title and type(m.params.update.title) == "string" then
         chat:set_title(m.params.update.title)
       end
     elseif m.params.update and m.params.update.sessionUpdate == "usage_update" then
       local chat = self:get_chat(m.params.sessionId)
+      local rate_limit = m.params.update._meta and m.params.update._meta["_claude/rateLimit"]
+      if chat and rate_limit then
+        chat.rate_limit = rate_limit
+      end
       if chat and m.params.update.used then
         chat.tokens = m.params.update.used
         chat.context_usage = { used = m.params.update.used, size = m.params.update.size }
-        if chat.composer then
-          chat.composer:update_status()
-        end
+      end
+      if chat and chat.composer then
+        chat.composer:update_status()
       end
     elseif m.params.update and m.params.update.sessionUpdate == "compaction_update" then
       self:handle_compaction_update({ session_id = m.params.sessionId, update = m.params.update })

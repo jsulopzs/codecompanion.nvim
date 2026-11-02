@@ -419,6 +419,22 @@ T["ACPHandler"]["passes the agent's error to on_completed"] = function()
   h.eq("The agent exited unexpectedly", result.error)
 end
 
+T["ACPHandler"]["adds login guidance and pauses the queue after a rate limit error"] = function()
+  local result = child.lua([[
+    local chat = h.setup_chat_buffer({}, {
+      name = "test_acp",
+      config = { name = "test_acp", type = "acp", handlers = { form_messages = function(_, messages) return messages end } },
+    })
+    local completion
+    chat:add_callback("on_completed", function(_, args) completion = args end)
+    local handler = require("codecompanion.interactions.chat.acp.handler").new(chat)
+    handler:handle_error("Rate limit exceeded")
+    return { completion.error, chat.queue.paused }
+  ]])
+  h.expect_contains("gL para iniciar sesión con otra cuenta", result[1])
+  h.is_true(result[2])
+end
+
 T["ACPHandler"]["integrates with chat submit flow"] = function()
   local result = child.lua([[
     -- Create chat with ACP adapter
