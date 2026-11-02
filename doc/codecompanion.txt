@@ -15174,12 +15174,13 @@ actionable session error. A limit error pauses queued prompts and points to
 Codex advertises `chat-gpt` as an agent login method and can advertise
 `chat-gpt-device-code` when URL elicitation is available. `gL` excludes
 `api-key` because it needs a key. When Codex needs a new login, it completes in
-the browser. If Codex already has a working ChatGPT login, its `authenticate`
-method accepts that session without opening the browser, so `gL` cannot switch
-accounts in that case. `gL` does not close the current session unless you
-explicitly confirm a logout requested after an agent rejection. Codex does not
-include rate limit status in `usage_update`. Its AIR session failure can report
-a `login` action, which the composer links to `gL`.
+the browser. When Codex advertises `_meta.replaceLogin`, `gL` requests a new
+ChatGPT login even if one is active. The current session stays available until
+the new login completes; cancelling or failing the new login leaves it in
+place. `gL` does not close the current session unless you explicitly confirm a
+logout requested after an agent rejection. Codex does not include rate limit
+status in `usage_update`. Its AIR session failure can report a `login` action,
+which the composer links to `gL`.
 
 
 AUTONOMOUS TURNS

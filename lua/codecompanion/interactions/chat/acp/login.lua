@@ -16,6 +16,14 @@ local function is_agent_login(method)
   return not method.id:find("api%-key") and meta["api-key"] == nil and meta.gateway == nil
 end
 
+local function auth_request(method)
+  local request = { methodId = method.id }
+  if is_agent_login(method) and method._meta and method._meta.replaceLogin == true then
+    request._meta = { replaceLogin = true }
+  end
+  return request
+end
+
 ---Resolve the terminal command advertised by an ACP auth method
 ---@param opts { method: table, connection: CodeCompanion.ACP.Connection }
 ---@return string[]|nil
@@ -165,8 +173,7 @@ function M.run_agent(opts)
   chat:_set_status({ key = "auth", message = "esperando el login en el navegador… (gL cancela)" })
 
   async.sync(function()
-    local authenticated, error_response =
-      connection:send_rpc_request(methods.AUTHENTICATE, { methodId = opts.method.id })
+    local authenticated, error_response = connection:send_rpc_request(methods.AUTHENTICATE, auth_request(opts.method))
     local capabilities = connection._agent_info.agentCapabilities or {}
     if
       not authenticated
@@ -179,7 +186,7 @@ function M.run_agent(opts)
         local logged_out = connection:send_rpc_request(methods.LOGOUT, {})
         if logged_out and not login.cancelled then
           chat:_set_status({ key = "auth", message = "esperando el login en el navegador… (gL cancela)" })
-          authenticated = connection:send_rpc_request(methods.AUTHENTICATE, { methodId = opts.method.id })
+          authenticated = connection:send_rpc_request(methods.AUTHENTICATE, auth_request(opts.method))
         end
       else
         login.cancelled = true
@@ -223,10 +230,18 @@ function M.pick(chat)
   if #methods == 0 then
     return utils.notify("This agent does not advertise interactive login methods", vim.log.levels.INFO)
   end
+  local can_replace_login = false
+  for _, method in ipairs(methods) do
+    if is_agent_login(method) and method._meta and method._meta.replaceLogin == true then
+      can_replace_login = true
+      break
+    end
+  end
 
   vim.ui.select(methods, {
     kind = "codecompanion.nvim",
-    prompt = "Log in with",
+    prompt = can_replace_login and "Log in with (current session stays active until the new login completes)"
+      or "Log in with",
     format_item = function(method)
       return method.name or method.id
     end,

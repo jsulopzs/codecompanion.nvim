@@ -239,25 +239,27 @@ T["ACP Connection"]["selects Codex browser login methods without listing API key
   local result = child.lua([[
     local login = require("codecompanion.interactions.chat.acp.login")
     local select = vim.ui.select
-    local choices, selected
-    vim.ui.select = function(items, _, callback)
+    local choices, selected, prompt
+    vim.ui.select = function(items, opts, callback)
       choices = vim.tbl_map(function(item) return item.id end, items)
+      prompt = opts.prompt
       callback(items[1])
     end
     login.run_agent = function(opts) selected = opts.method.id end
     login.pick({ acp_connection = {
       _agent_info = { authMethods = {
         { id = "api-key", name = "API Key" },
-        { id = "chat-gpt", name = "ChatGPT" },
+        { id = "chat-gpt", name = "ChatGPT", _meta = { replaceLogin = true } },
         { id = "chat-gpt-device-code", name = "ChatGPT device code" },
       } },
       session_id = "session-1", can_load_session = function() return true end,
     } })
     vim.ui.select = select
-    return { choices, selected }
+    return { choices, selected, prompt }
   ]])
   h.eq({ "chat-gpt", "chat-gpt-device-code" }, result[1])
   h.eq("chat-gpt", result[2])
+  h.expect_contains("current session stays active until the new login completes", result[3])
 end
 
 T["ACP Connection"]["authenticates without logging out before reloading an agent login"] = function()
@@ -287,6 +289,49 @@ T["ACP Connection"]["authenticates without logging out before reloading an agent
   h.eq({ { "authenticate", "chat-gpt" }, { "pause", "login" }, { "restart" } }, result[1])
   h.eq("chat-gpt", result[2])
   h.is_true(result[3])
+end
+
+T["ACP Connection"]["requests advertised login replacement without logging out"] = function()
+  local result = child.lua([[
+    local login = require("codecompanion.interactions.chat.acp.login")
+    local calls = {}
+    local connection = {
+      _agent_info = { agentCapabilities = { auth = { logout = {} } } },
+      adapter = { defaults = {} },
+      send_rpc_request = function(_, method, params)
+        table.insert(calls, { method, params })
+        return {}
+      end,
+      restart_after_login = function() return true end,
+    }
+    local chat = {
+      acp_connection = connection,
+      _set_status = function() end, _clear_status = function() end,
+      queue = { pause = function() end },
+    }
+    login.run_agent({ chat = chat, method = { id = "chat-gpt", _meta = { replaceLogin = true } } })
+    return calls
+  ]])
+  h.eq({ { "authenticate", { methodId = "chat-gpt", _meta = { replaceLogin = true } } } }, result)
+end
+
+T["ACP Connection"]["keeps unadvertised agent login request unchanged"] = function()
+  local result = child.lua([[
+    local login = require("codecompanion.interactions.chat.acp.login")
+    local request
+    local connection = {
+      _agent_info = { agentCapabilities = {} }, adapter = { defaults = {} },
+      send_rpc_request = function(_, _, params) request = params; return {} end,
+      restart_after_login = function() return true end,
+    }
+    local chat = {
+      acp_connection = connection, _set_status = function() end, _clear_status = function() end,
+      queue = { pause = function() end },
+    }
+    login.run_agent({ chat = chat, method = { id = "other-login", type = "agent" } })
+    return request
+  ]])
+  h.eq({ methodId = "other-login" }, result)
 end
 
 T["ACP Connection"]["logs out only after the user confirms replacing an active session"] = function()
