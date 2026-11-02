@@ -56,7 +56,11 @@ end
 
 ---@param queue table
 function M.open(queue)
-  local lines = { "Queue: <CR> send, e edit, dd delete, K/J move, P first, p park/queue, r resume" }
+  local lines = {
+    "Queue: <CR> send, e edit, dd delete, K/J move, P first, p park/queue, r resume, " .. require(
+      "codecompanion.config"
+    ).interactions.chat.composer.keymaps.compact .. " compact",
+  }
   local rows = {}
   table.insert(lines, "Queue")
   rows[#lines] = { section = "queue" }

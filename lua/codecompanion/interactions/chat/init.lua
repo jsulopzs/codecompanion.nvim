@@ -712,6 +712,9 @@ function Chat.new(args)
     map_history("gQ", function()
       require("codecompanion.interactions.chat.queue.view").open(self.queue)
     end)
+    map_history(config.interactions.chat.composer.keymaps.compact, function()
+      self:compact_context()
+    end)
     local group = api.nvim_create_augroup("codecompanion.composer." .. self.bufnr, { clear = true })
     local dock_scheduled = false
     api.nvim_create_autocmd({ "WinNew", "WinClosed", "WinResized" }, {
@@ -1617,6 +1620,25 @@ function Chat:send_text(text)
     self.composer:update_status()
   end
   return self.current_request ~= nil
+end
+
+---Send the agent's advertised compact command or queue it after the active request
+---@return boolean
+function Chat:compact_context()
+  local connection = self.acp_connection
+  local commands = connection
+    and require("codecompanion.interactions.chat.acp.commands").get_commands_for_session(connection.session_id)
+  local command = commands and vim.iter(commands):find(function(item)
+    return item.name == "compact"
+  end)
+  if not command then
+    utils.notify("This agent has not advertised a compact command", vim.log.levels.WARN)
+    return false
+  end
+  if self.current_request then
+    return self.queue:add({ text = "/" .. command.name }) ~= nil
+  end
+  return self:send_text("/" .. command.name)
 end
 
 ---@param text string

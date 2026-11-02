@@ -170,6 +170,30 @@ T["Composer"]["shows one history notice for a completed compaction"] = function(
   h.eq(1, select(2, result.history:gsub("compacted · 944k → 120k", "")))
 end
 
+T["Composer"]["sends the advertised compact command now or after the active request"] = function()
+  local result = child.lua([[
+    local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })
+    local commands = require("codecompanion.interactions.chat.acp.commands")
+    chat.acp_connection = { session_id = "compact-session" }
+    local sent = {}
+    function chat:send_text(text) table.insert(sent, text); return true end
+    local missing = chat:compact_context()
+    commands.register_commands("compact-session", { { name = "compact", description = "Compact" } })
+    local immediate = chat:compact_context()
+    chat.current_request = {}
+    local queued = chat:compact_context()
+    local item = chat.queue:next_pending()
+    return { missing = missing, immediate = immediate, queued = queued, sent = sent, item = item and item.text, history_key = vim.fn.maparg("gC", "n", false, true).buffer, composer_key = vim.api.nvim_buf_call(chat.composer.bufnr, function() return vim.fn.maparg("gC", "n", false, true).buffer end) }
+  ]])
+  h.is_false(result.missing)
+  h.is_true(result.immediate)
+  h.is_true(result.queued)
+  h.eq({ "/compact" }, result.sent)
+  h.eq("/compact", result.item)
+  h.eq(1, result.history_key)
+  h.eq(1, result.composer_key)
+end
+
 T["Composer"]["submits text as a visible user message"] = function()
   local result = child.lua([[
     local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })

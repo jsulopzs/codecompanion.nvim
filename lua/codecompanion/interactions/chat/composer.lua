@@ -45,6 +45,9 @@ function Composer.new(chat)
   map("n", keys.manager, function()
     require("codecompanion.interactions.chat.queue.view").open(chat.queue)
   end)
+  map("n", keys.compact, function()
+    chat:compact_context()
+  end)
   map("n", "q", function()
     if chat.current_request then
       chat:stop()
@@ -174,13 +177,14 @@ function Composer:update_status()
     end
   end
   local hint = string.format(
-    "%s · %s %s · %s queue · %s park · %s manage%s",
+    "%s · %s %s · %s queue · %s park · %s manage · %s compact%s",
     state,
     keys.send,
     busy and "correct" or "send",
     keys.queue,
     keys.park,
     keys.manager,
+    keys.compact,
     busy and " · q stop" or ""
   )
   local segments = { { hint, "Comment" } }
