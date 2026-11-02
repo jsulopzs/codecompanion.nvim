@@ -414,6 +414,14 @@ end
 ---@param session_id? string
 ---@return nil
 function Connection:use_session(session_id)
+  if self.session_id ~= session_id and self.chat then
+    self.chat.context_usage = nil
+    self.chat.tokens = nil
+    self.chat.compacting = false
+    if self.chat.composer then
+      self.chat.composer:update_status()
+    end
+  end
   self.session_id = session_id
   self._config_options = self._session_config_options[session_id] or {}
 end

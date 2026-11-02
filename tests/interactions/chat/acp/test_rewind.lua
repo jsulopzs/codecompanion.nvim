@@ -115,6 +115,27 @@ T["rewind"]["rewinding to the first turn starts a new session"] = function()
   h.eq({ "first" }, result.tail)
 end
 
+T["rewind"]["sends a prompt after rewinding to the first turn"] = function()
+  local result = child.lua([[
+    local chat, conn = rewind_chat(function() return {} end)
+    conn.chat = chat
+    chat.context_usage = { used = 900000, size = 1000000 }
+    chat.tokens = 900000
+    conn.ensure_session = function(self) self.session_id = "fresh"; return true end
+    local ok = require("codecompanion.interactions.chat.acp.rewind").to(chat, 1)
+    local sent = chat:send_now("first again")
+    return { ok = ok, sent = sent, message = chat.messages[#chat.messages] and chat.messages[#chat.messages].content, session = conn.session_id, paused = chat.queue.paused, prompt = _G.last_prompt_request ~= nil, usage = chat.context_usage, tokens = chat.tokens }
+  ]])
+  h.is_true(result.ok)
+  h.is_true(result.sent)
+  h.eq("first again", result.message)
+  h.eq("fresh", result.session)
+  h.is_false(result.paused)
+  h.is_true(result.prompt)
+  h.eq(nil, result.usage)
+  h.eq(nil, result.tokens)
+end
+
 T["rewind"]["refuses while a request is running"] = function()
   local result = child.lua([[
     local chat = rewind_chat(function() return {} end)
