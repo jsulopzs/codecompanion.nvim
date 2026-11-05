@@ -1,4 +1,4 @@
-*codecompanion.txt*        For NVIM v0.12        Last change: 2026 November 02
+*codecompanion.txt*        For NVIM v0.12        Last change: 2026 November 05
 
 ==============================================================================
 Table of Contents                            *codecompanion-table-of-contents*
@@ -3692,6 +3692,12 @@ successful login restarts the agent and reloads the current session with the
 queue paused. Cancelling or failing an agent login keeps the chat open and does
 not call logout. CodeCompanion asks before logging out only if the agent
 rejects authentication because another session is active.
+
+A login also reaches the other chats of the same agent, including chats in
+other Neovim instances. Chats that the old account blocked with a limit or a
+login error restart on the new account straight away and retry the prompt that
+failed. Other chats switch quietly before their next prompt, and a chat whose
+turn is still running is never interrupted.
 
 Press `gA` in a Claude Code or Codex chat to open the other agent with a draft
 handoff in its composer. Review or edit the draft before sending it. The draft
@@ -15162,7 +15168,10 @@ ask the agent to authenticate directly; the agent handles browser login and any
 verification URL or code. CodeCompanion asks before logging out only if the
 agent rejects authentication because a session is already active. After a
 successful login, CodeCompanion restarts the agent and reloads the same
-session. It does not read or write credentials.
+session. It does not read or write credentials. It does write a marker per
+adapter under `stdpath("state")/codecompanion/acp_logins/`, with no credential
+in it, so every Neovim restarts its other chats of that agent: blocked chats at
+once, the rest before their next prompt.
 
 Claude Code reports rate limit status in
 `usage_update._meta["_claude/rateLimit"]`. When the limit is active and its
