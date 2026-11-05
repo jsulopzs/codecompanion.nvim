@@ -93,6 +93,7 @@ function M.run(opts)
           if not chat.acp_connection:restart_after_login() then
             utils.notify("Login succeeded, but the session could not be reloaded", vim.log.levels.ERROR)
           end
+          require("codecompanion.interactions.chat.acp.account").announce(chat)
         end)()
       end)
     end,
@@ -160,6 +161,7 @@ local function finish_agent_login(opts)
   if not opts.connection:restart_after_login() then
     utils.notify("Login succeeded, but the session could not be reloaded", vim.log.levels.ERROR)
   end
+  require("codecompanion.interactions.chat.acp.account").announce(opts.chat)
 end
 
 ---Ask the agent to start a browser login and reload the session on success

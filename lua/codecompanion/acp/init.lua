@@ -201,6 +201,9 @@ function Connection:connect_and_authenticate()
       return self:start_agent_process() and self:_initialize() and self:_authenticate()
     end,
   })
+  if connected and self.chat and self.adapter and self.adapter.name then
+    require("codecompanion.interactions.chat.acp.account").watch(self.adapter.name)
+  end
 
   return connected and self or nil
 end
@@ -869,9 +872,11 @@ function Connection:disconnect()
   assert(self._state.handle):kill("sigterm")
 end
 
----Restart the agent and load the current session after a successful terminal login
+---Restart the agent and load the current session after a successful login
+---@param opts? { quiet?: boolean } quiet keeps the chat buffer as it is instead of redrawing the history
 ---@return boolean
-function Connection:restart_after_login()
+function Connection:restart_after_login(opts)
+  opts = opts or {}
   local session_id = self.session_id
   if not session_id or not self:can_load_session() or not self.chat then
     return false
@@ -883,7 +888,13 @@ function Connection:restart_after_login()
   if not self:connect_and_authenticate() then
     return false
   end
-  if not require("codecompanion.interactions.chat.acp.restore").session(self.chat, session_id) then
+  local loaded
+  if opts.quiet then
+    loaded = self:load_session(session_id, { on_session_update = function() end })
+  else
+    loaded = require("codecompanion.interactions.chat.acp.restore").session(self.chat, session_id)
+  end
+  if not loaded then
     return false
   end
   for index, turn in ipairs(self:turns(session_id)) do

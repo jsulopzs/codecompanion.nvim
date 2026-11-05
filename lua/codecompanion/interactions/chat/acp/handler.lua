@@ -140,6 +140,9 @@ function ACPHandler:submit(payload)
 
   -- Keep the agent's request off the main loop
   async.sync(function()
+    if self.chat._acp_account_stale then
+      require("codecompanion.interactions.chat.acp.account").reload(self.chat)
+    end
     local session_ready = self:ensure_connection() and self:ensure_session()
 
     -- A stop or a newer submission can replace this request while the agent boots,
