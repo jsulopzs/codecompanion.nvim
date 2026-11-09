@@ -69,6 +69,40 @@ local T = new_set({
 
 T["ACP Connection"] = new_set()
 
+T["ACP Connection"]["reports bounded stderr when the agent exits unsuccessfully"] = function()
+  local result = child.lua([[
+    local log = require('codecompanion.utils.log')
+    local errors = {}
+    log.error = function(_, message, ...)
+      table.insert(errors, string.format(message, ...))
+    end
+    local callbacks
+    local connection = create_test_connection({ job = function(_, opts)
+      callbacks = opts
+      return { write = function() end, kill = function() end }
+    end })
+    function connection:prepare_adapter() return test_adapter end
+    connection:start_agent_process()
+    callbacks.stderr(nil, string.rep('x', 9000))
+    callbacks.stderr(nil, '\nnpm error E504 Gateway Time-out\n')
+    connection:handle_process_exit(1, 0)
+    local failure = errors[1]
+    errors = {}
+    connection:start_agent_process()
+    callbacks.stderr(nil, 'normal diagnostic output')
+    connection:handle_process_exit(0, 0)
+    connection:start_agent_process()
+    connection:disconnect()
+    connection:handle_process_exit(0, 15)
+    return { failure = failure, clean_exit_errors = #errors }
+  ]])
+
+  h.expect_contains("Agent exited (code=1, signal=0)", result.failure)
+  h.expect_contains("npm error E504 Gateway Time-out", result.failure)
+  h.eq(#result.failure < 8300, true)
+  h.eq(result.clean_exit_errors, 0)
+end
+
 T["ACP Connection"]["can create connection with adapter"] = function()
   local result = child.lua([[
     local connection = ACP.new({ adapter = test_adapter })

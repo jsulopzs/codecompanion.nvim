@@ -694,6 +694,8 @@ function Connection:start_agent_process()
   end
 
   self._state.line_buffer:reset()
+  self._stderr_tail = ""
+  self._stopping = false
 
   self._rpc_log = log.new_response_file()
   log:info("[acp] RPC log: %s", self._rpc_log.path)
@@ -717,6 +719,9 @@ function Connection:start_agent_process()
       stderr = self.methods.schedule_wrap(function(err, data)
         if err then
           log:error("[acp::start_agent_process::stderr] Error: %s", err)
+        elseif data and data ~= "" then
+          self._stderr_tail = ((self._stderr_tail or "") .. data):sub(-8192)
+          log:debug("[acp::stderr] %s", data, { silent = true })
         end
       end),
     },
@@ -869,6 +874,7 @@ end
 ---Disconnect and clean up the ACP process
 ---@return nil
 function Connection:disconnect()
+  self._stopping = true
   assert(self._state.handle):kill("sigterm")
 end
 
@@ -1429,6 +1435,10 @@ end
 ---@param signal number
 function Connection:handle_process_exit(code, signal)
   log:debug("[acp] Process exited (code=%s, signal=%s)", code, signal)
+  if not self._stopping and (code ~= 0 or signal ~= 0) then
+    local detail = vim.trim(self._stderr_tail or "")
+    log:error("[acp] Agent exited (code=%s, signal=%s)%s", code, signal, detail ~= "" and (": " .. detail) or "")
+  end
 
   if self.adapter_modified then
     acp_adapter.call_handler(self.adapter_modified, "on_exit", { code = code })
