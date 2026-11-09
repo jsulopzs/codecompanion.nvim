@@ -30,11 +30,11 @@ format:
 
 test: deps
 	@echo Testing...
-	LC_ALL=C $(NVIM) --headless --noplugin -u ./scripts/minimal_init.lua -c "lua MiniTest.run()"
+	LC_ALL=C "$(NVIM)" --headless --noplugin -u ./scripts/minimal_init.lua -c "lua MiniTest.run()"
 
 test_file: deps
 	@echo Testing File...
-	LC_ALL=C $(NVIM) --headless --noplugin -u ./scripts/minimal_init.lua -c "lua MiniTest.run_file('$(FILE)')"
+	LC_ALL=C "$(NVIM)" --headless --noplugin -u ./scripts/minimal_init.lua -c "lua MiniTest.run_file('$(FILE)')"
 
 deps: deps/plenary.nvim deps/nvim-treesitter deps/mini.nvim deps/panvimdoc
 	@git -C deps/nvim-treesitter checkout --quiet $(TREESITTER_REVISION)
