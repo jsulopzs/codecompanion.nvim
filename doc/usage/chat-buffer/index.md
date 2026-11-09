@@ -46,6 +46,8 @@ Switching between ACP agents keeps the chat buffer and your draft, even after to
 
 The ACP composer shows the active provider, model, effort, permission mode and connection state. Settings the agent hasn't reported appear as `unknown`. Each new reply keeps its original provider, model and effort in its header, so changing agents doesn't relabel earlier replies.
 
+In normal mode, press `gM` to select the model, `gE` to select reasoning effort or `ga` to change the adapter. These keys work in both the chat and the composer. Finish or stop the current turn before changing a setting.
+
 ## Changing ACP Command
 
 ACP adapters start the agent with a command from your configuration, `default` unless you choose otherwise. To start one with a different command:

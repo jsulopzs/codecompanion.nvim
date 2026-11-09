@@ -67,6 +67,24 @@ function SlashCommand:show_values(config_option)
   end)
 end
 
+---Select a reported model or reasoning effort directly
+---@param chat CodeCompanion.Chat
+---@param opts { category: string }
+function SlashCommand.select_category(chat, opts)
+  if chat.current_request or chat._changing_adapter then
+    return utils.notify("Finish or stop the current turn before changing settings", vim.log.levels.WARN)
+  end
+  if not chat.acp_connection then
+    return utils.notify("No ACP connection available", vim.log.levels.WARN)
+  end
+  for _, option in ipairs(chat.acp_connection:get_config_options()) do
+    if option.category == opts.category or (opts.category == "thought_level" and option.id == "reasoning_effort") then
+      return SlashCommand.show_values({ Chat = chat }, option)
+    end
+  end
+  return utils.notify("The agent has not reported this setting", vim.log.levels.WARN)
+end
+
 ---Execute the slash command
 ---@return nil
 function SlashCommand:execute()

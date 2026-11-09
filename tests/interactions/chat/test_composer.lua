@@ -16,6 +16,23 @@ T = MiniTest.new_set({
 
 T["Composer"] = MiniTest.new_set()
 
+T["Composer"]["selects model and effort with separate keys"] = function()
+  local result = child.lua([[
+    local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })
+    chat.acp_connection = { get_config_options = function() return { {id="model",category="model",type="select"}, {id="effort",category="thought_level",type="select"} } end }
+    local choices = {}
+    local picker = require("codecompanion.interactions.chat.slash_commands.builtin.acp_session_options")
+    picker.show_values = function(_, option) table.insert(choices, option.id) end
+    for _, key in ipairs({"gM", "gE"}) do
+      for _, item in ipairs(vim.api.nvim_buf_get_keymap(chat.composer.bufnr, "n")) do if item.lhs == key then item.callback() end end
+    end
+    chat.current_request = {}
+    picker.select_category(chat, {category="model"})
+    return choices
+  ]])
+  h.eq({ "model", "effort" }, result)
+end
+
 T["Composer"]["stays below its chat after horizontal and vertical splits close"] = function()
   local result = child.lua([[
     local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })

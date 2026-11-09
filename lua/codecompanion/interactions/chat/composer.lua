@@ -48,6 +48,21 @@ function Composer.new(chat)
   map("n", keys.compact, function()
     chat:compact_context()
   end)
+  map("n", keys.adapter, function()
+    require("codecompanion.interactions.chat.keymaps.change_adapter").callback(chat)
+  end)
+  map("n", keys.model, function()
+    require("codecompanion.interactions.chat.slash_commands.builtin.acp_session_options").select_category(
+      chat,
+      { category = "model" }
+    )
+  end)
+  map("n", keys.effort, function()
+    require("codecompanion.interactions.chat.slash_commands.builtin.acp_session_options").select_category(
+      chat,
+      { category = "thought_level" }
+    )
+  end)
   map("n", keys.login, function()
     require("codecompanion.interactions.chat.acp.login").pick(chat)
   end)
@@ -210,13 +225,15 @@ function Composer:update_status()
   end
   table.insert(segments, {
     string.format(
-      " · %s %s · %s queue · %s park · %s manage · %s compact · %s login%s",
+      " · %s %s · %s queue · %s park · %s manage · %s compact · %s model · %s effort · %s login%s",
       keys.send,
       busy and "correct" or "send",
       keys.queue,
       keys.park,
       keys.manager,
       keys.compact,
+      keys.model,
+      keys.effort,
       keys.login,
       busy and " · q stop" or ""
     ),

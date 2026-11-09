@@ -715,6 +715,14 @@ function Chat.new(args)
     map_history(config.interactions.chat.composer.keymaps.compact, function()
       self:compact_context()
     end)
+    for _, setting in ipairs({ "model", "effort" }) do
+      map_history(config.interactions.chat.composer.keymaps[setting], function()
+        require("codecompanion.interactions.chat.slash_commands.builtin.acp_session_options").select_category(
+          self,
+          { category = setting == "model" and "model" or "thought_level" }
+        )
+      end)
+    end
     local group = api.nvim_create_augroup("codecompanion.composer." .. self.bufnr, { clear = true })
     local dock_scheduled = false
     api.nvim_create_autocmd({ "WinNew", "WinClosed", "WinResized" }, {
