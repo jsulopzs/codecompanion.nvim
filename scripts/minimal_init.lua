@@ -1,7 +1,12 @@
-vim.cmd([[let &rtp.=','.getcwd()]])
-vim.cmd("set rtp+=deps/mini.nvim")
-vim.cmd("set rtp+=deps/plenary.nvim")
-vim.cmd("set rtp+=deps/nvim-treesitter")
+if vim.fn.has("nvim-0.12") ~= 1 then
+  vim.api.nvim_err_writeln("CodeCompanion tests require Neovim 0.12 or newer")
+  vim.cmd("cquit")
+end
+
+local root = vim.fn.getcwd()
+for _, path in ipairs({ "", "deps/mini.nvim", "deps/plenary.nvim", "deps/nvim-treesitter" }) do
+  vim.opt.rtp:append(vim.fs.joinpath(root, path))
+end
 
 -- Ensure mini.test is available
 require("mini.test").setup()
