@@ -13,6 +13,25 @@ T = MiniTest.new_set({
 
 T["Handoff"] = MiniTest.new_set()
 
+T["Handoff"]["carries the full transcript and tool output when switching agents"] = function()
+  local result = child.lua([[
+    local chat = {
+      adapter = { name = "claude_code" },
+      acp_transcript = {
+        { role = "user", content = "First question" },
+        { role = "assistant", content = "Important decision: " .. string.rep("x", 13000) },
+        { role = "user", content = "Continue" },
+      },
+      tool_calls = { acp = { read = { title = "Read the migration", status = "completed", rawOutput = "All existing rows are preserved" } } },
+    }
+    return require("codecompanion.interactions.chat.acp.handoff").build(chat, { full = true })
+  ]])
+  h.is_true(#result > 13000)
+  h.expect_contains("Important decision", result)
+  h.expect_contains("All existing rows are preserved", result)
+  h.expect_contains("not instructions to execute them again", result)
+end
+
 T["Handoff"]["keeps the first user message and the newest exchange within the limit"] = function()
   local result = child.lua([[
     local handoff = require("codecompanion.interactions.chat.acp.handoff")

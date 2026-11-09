@@ -1418,6 +1418,10 @@ function Connection:handle_config_option_update(session_id, config_options)
   end
   if type(config_options) == "table" then
     self:_apply_config_options(config_options)
+    if self.chat and self.chat.acp_connection == self then
+      self.chat._acp_name_map_cache = nil
+      self.chat:update_metadata()
+    end
   end
 end
 
@@ -1473,6 +1477,9 @@ function Connection:handle_process_exit(code, signal)
     end)
   end
   self._active_prompt = nil
+  if self.chat and self.chat.acp_connection == self then
+    self.chat:update_metadata()
+  end
 end
 
 ---Initiate a prompt

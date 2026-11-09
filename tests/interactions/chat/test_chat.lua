@@ -24,6 +24,76 @@ T = new_set({
 
 T["Chat"] = new_set()
 
+T["Chat"]["switches ACP agents after tools while preserving the conversation"] = function()
+  local result = child.lua([[
+    local chat = _G.chat
+    chat.adapter = { name = "claude_code", type = "acp", formatted_name = "Claude Code", roles = { user = "user", llm = "assistant" } }
+    chat.acp_transcript = { { role = "user", content = "Keep the database intact" }, { role = "assistant", content = "The migration preserves every row" } }
+    chat:add_message({ role = "user", content = "Keep the database intact" })
+    chat:add_message({ role = "llm", content = "The migration preserves every row", reasoning = "PRIVATE REASONING", tool_calls = { { id = "edit", signature = "PRIVATE SIGNATURE" } } })
+    chat.tool_calls.acp.edit = { title = "Update migration", status = "completed", content = { { type = "content", content = { type = "text", text = "Migration validated" } } } }
+    local old = { session_id = "claude-session", _state = { handle = {} }, is_ready = function() return true end }
+    old.disconnect = function(self) self.disconnected = true; assert(self.chat == nil) end
+    chat.acp_connection = old
+    local callback
+    require("codecompanion.adapters").resolve = function()
+      return { name = "codex", type = "acp", formatted_name = "Codex", roles = { user = "user", llm = "assistant" } }
+    end
+    require("codecompanion.interactions.chat.helpers").create_acp_connection = function(current, ready)
+      callback = ready
+      current.acp_connection = { session_id = "codex-session", is_ready = function() return true end, get_models = function() return nil end, get_config_options = function() return {} end, build_name_map = function() return {} end }
+    end
+    local bufnr, draft = chat.bufnr, vim.api.nvim_buf_get_lines(chat.bufnr, 0, -1, false)
+    local accepted = chat:change_adapter({ adapter = "codex" })
+    local was_connecting = chat._changing_adapter
+    callback()
+    return { accepted, was_connecting, chat.adapter.name, chat.bufnr == bufnr, old.disconnected, chat.acp_connection._handoff, vim.deep_equal(draft, vim.api.nvim_buf_get_lines(chat.bufnr, 0, -1, false)), chat.messages[#chat.messages]._meta.session.provider }
+  ]])
+  h.eq({ true, true, "codex", true, true }, { result[1], result[2], result[3], result[4], result[5] })
+  h.expect_contains("Keep the database intact", result[6])
+  h.expect_contains("Migration validated", result[6])
+  h.is_false(result[6]:find("PRIVATE", 1, true) ~= nil)
+  h.is_true(result[7])
+  h.eq("Claude Code", result[8])
+end
+
+T["Chat"]["keeps the original agent when its replacement fails to connect"] = function()
+  local result = child.lua([[
+    local chat = _G.chat
+    local adapter = { name = "claude_code", type = "acp", formatted_name = "Claude Code" }
+    chat.adapter = adapter
+    local original = { session_id = "original", is_ready = function() return true end, get_models = function() return nil end, get_config_options = function() return {} end, build_name_map = function() return {} end }
+    chat.acp_connection = original
+    chat.acp_session_id = "resume-original"
+    local sent = { role = "user", content = "Original", _meta = { sent = false } }
+    table.insert(chat.messages, sent)
+    require("codecompanion.adapters").resolve = function() return { name = "codex", type = "acp", formatted_name = "Codex" } end
+    require("codecompanion.interactions.chat.helpers").create_acp_connection = function(current, ready)
+      current.acp_connection = { is_ready = function() return false end }
+      ready()
+    end
+    chat:change_adapter({ adapter = "codex" })
+    return { chat.adapter == adapter, chat.acp_connection == original, chat.acp_session_id, chat._changing_adapter == nil, sent._meta.sent }
+  ]])
+  h.eq({ true, true, "resume-original", true, false }, result)
+end
+
+T["Chat"]["preserves a draft when a switch or active turn blocks submission"] = function()
+  local result = child.lua([[
+    local chat = _G.chat
+    chat.adapter = { name = "claude_code", type = "acp", formatted_name = "Claude Code" }
+    chat.current_request = {}
+    require("codecompanion.adapters").resolve = function() return { name = "codex", type = "acp", formatted_name = "Codex" } end
+    local accepted = chat:change_adapter({ adapter = "codex" })
+    chat.current_request = nil
+    chat._changing_adapter = true
+    local before = vim.api.nvim_buf_get_lines(chat.bufnr, 0, -1, false)
+    local sent = chat:send_text("A queued task must not overwrite my draft")
+    return { accepted, sent, vim.deep_equal(before, vim.api.nvim_buf_get_lines(chat.bufnr, 0, -1, false)) }
+  ]])
+  h.eq({ false, false, true }, result)
+end
+
 T["Chat"]["system prompt is added first"] = function()
   local messages = child.lua_get([[_G.chat.messages]])
   h.eq("system", messages[1].role)

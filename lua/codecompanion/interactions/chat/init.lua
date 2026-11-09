@@ -913,6 +913,13 @@ function Chat:change_adapter(args)
 
   local new_adapter = require("codecompanion.adapters").resolve(args.adapter, { model = args.model })
 
+  if self.adapter.name ~= new_adapter.name and self.adapter.type == "acp" and new_adapter.type == "acp" then
+    return require("codecompanion.interactions.chat.acp.handoff").switch(
+      self,
+      { adapter = new_adapter, callback = args.callback }
+    )
+  end
+
   -- Block adapter swaps once tool calls or reasoning have happened. Adapter-
   -- specific state (tool-call signatures, encrypted reasoning blobs) cannot
   -- be carried into a different vendor's API. Model swaps within the same
@@ -1185,6 +1192,10 @@ function Chat:add_message(data, opts)
     opts.context = nil
   end
 
+  if self.adapter.type == "acp" and data.role == config.constants.LLM_ROLE and not message._meta.session then
+    message._meta.session =
+      vim.deepcopy(self._response_session or require("codecompanion.interactions.chat.model_info").snapshot(self))
+  end
   message.opts = opts
   message._meta.id = hash.hash(message)
 
@@ -1469,6 +1480,9 @@ end
 ---@param opts? table
 ---@return nil
 function Chat:submit(opts)
+  if self._changing_adapter then
+    return utils.notify("Connecting the new agent; your draft is preserved", vim.log.levels.INFO)
+  end
   if self.current_request then
     if self.acp_connection and self.acp_connection._autonomous_turn then
       return utils.notify("The agent is working. Wait for its turn to finish before sending.", vim.log.levels.INFO)
@@ -1623,7 +1637,7 @@ end
 ---@param text string
 ---@return boolean
 function Chat:send_text(text)
-  if self.current_request or vim.trim(text) == "" then
+  if self._changing_adapter or self.current_request or vim.trim(text) == "" then
     return false
   end
   local expanded = require("codecompanion.interactions.chat.queue.dispatcher").expand({ chat = self, text = text })
@@ -2324,6 +2338,10 @@ function Chat:update_metadata()
     tokens = self.tokens or 0,
     tools = vim.tbl_count(self.tool_registry.in_use) or 0,
   }
+
+  if self.composer then
+    self.composer:update_status()
+  end
 
   if self.adapter.type == "acp" then
     if model and model ~= "default" then

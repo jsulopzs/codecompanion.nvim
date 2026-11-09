@@ -15,6 +15,27 @@ local T = new_set({
 
 T["restore_session"] = new_set()
 
+T["restore_session"]["does not assign the current model to replies restored without model information"] = function()
+  local result = child.lua([[
+    local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Agent" } })
+    local connection = require("codecompanion.acp").new({ adapter = chat.adapter, chat = chat, session_id = "restored" })
+    chat.acp_connection = connection
+    connection:_apply_config_options({
+      { id = "model", category = "model", type = "select", currentValue = "current-model", options = {} },
+      { id = "effort", category = "thought_level", type = "select", currentValue = "high", options = {} },
+    })
+    require("codecompanion.interactions.chat.acp.render").restore_session(chat, {
+      { sessionUpdate = "user_message_chunk", content = { type = "text", text = "Earlier question" } },
+      { sessionUpdate = "agent_message_chunk", content = { type = "text", text = "Earlier reply" } },
+    })
+    return { table.concat(vim.api.nvim_buf_get_lines(chat.bufnr, 0, -1, false), "\n"), require("codecompanion.interactions.chat.model_info").snapshot(chat) }
+  ]])
+  h.expect_contains("unknown · effort unknown", result[1])
+  h.is_false(result[1]:find("current-model", 1, true) ~= nil)
+  h.eq("current-model", result[2].model)
+  h.eq("high", result[2].effort)
+end
+
 T["restore_session"]["ends on a user header the user can type into"] = function()
   local result = child.lua([[
     local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp" } })

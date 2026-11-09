@@ -8,6 +8,7 @@ local M = {}
 ---@param updates table[] Collected session update params from session/load
 ---@return nil
 function M.restore_session(chat, updates)
+  chat._restoring_session = true
   chat:clear()
   chat.acp_transcript = {}
 
@@ -62,6 +63,7 @@ function M.restore_session(chat, updates)
   -- The history is still queued in the builder, and ready_for_input decides on the next header from the last
   -- role written: without the flush it saw the role the chat had before it was cleared
   chat.builder:flush()
+  chat._restoring_session = nil
   chat:ready_for_input()
 end
 

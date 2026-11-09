@@ -42,6 +42,10 @@ From a chat buffer, `:CodeCompanionActions` opens the chat's own [Action Palette
 
 Press `ga` to pick a different adapter. If the adapter has more than one model, you're asked to pick one of those too. This works for both HTTP and ACP adapters, so you can move between an LLM and an agent in the same chat.
 
+Switching between ACP agents keeps the chat buffer and your draft, even after tools have run. Finish or stop the current turn first. The new agent starts a fresh session and receives the previous conversation and tool results as context with your next message. Completed tool calls are carried as text and aren't executed again. If the new agent can't connect, the original agent remains available.
+
+The ACP composer shows the active provider, model, effort, permission mode and connection state. Settings the agent hasn't reported appear as `unknown`. Each new reply keeps its original provider, model and effort in its header, so changing agents doesn't relabel earlier replies.
+
 ## Changing ACP Command
 
 ACP adapters start the agent with a command from your configuration, `default` unless you choose otherwise. To start one with a different command:

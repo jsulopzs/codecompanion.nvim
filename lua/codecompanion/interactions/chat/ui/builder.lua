@@ -217,7 +217,16 @@ function Builder:_render(data, opts)
   local prev_block = self.state.block_type
   if role_changed then
     table.insert(lines, BLANK)
-    self.chat.ui:set_header(lines, config.interactions.chat.roles[data.role])
+    if data.role == config.constants.LLM_ROLE then
+      self.chat._response_session = self.chat.adapter.type == "acp"
+          and require("codecompanion.interactions.chat.model_info").snapshot(self.chat)
+        or nil
+    end
+    self.chat.ui:set_header({
+      lines = lines,
+      role = config.interactions.chat.roles[data.role],
+      session = data.role == config.constants.LLM_ROLE and self.chat._response_session or nil,
+    })
     self.state.last_role = data.role
     self.state.block_type = nil
     prev_block = nil

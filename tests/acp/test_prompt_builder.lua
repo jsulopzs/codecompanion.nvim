@@ -78,6 +78,39 @@ local T = new_set({
 
 T["Prompt Builder"] = new_set()
 
+T["Prompt Builder"]["sends handoff context once without putting it into the conversation again"] = function()
+  local result = child.lua([[
+    local connection = ACP.new({ adapter = test_adapter, session_id = "new-agent" })
+    connection._agent_info = agent_info
+    connection.methods = { encode = vim.json.encode }
+    connection._handoff = "Previous conversation and completed actions"
+    local sent = {}
+    connection.write_message = function(_, text) table.insert(sent, vim.json.decode(text)); return true end
+    local first = connection:session_prompt({ { type = "text", text = "Continue the migration" } }):with_options({ silent = true })
+    first:send()
+    local turn = connection:turns("new-agent")[1].prompt
+    first:handle_done("end_turn")
+    connection:session_prompt({ { type = "text", text = "Check the result" } }):with_options({ silent = true }):send()
+    return { sent[1].params.prompt, turn, sent[2].params.prompt }
+  ]])
+  h.eq(2, #result[1])
+  h.expect_contains("Previous conversation", result[1][1].text)
+  h.eq("Continue the migration", result[2])
+  h.eq({ { type = "text", text = "Check the result" } }, result[3])
+end
+
+T["Prompt Builder"]["keeps handoff context available after a rejected prompt"] = function()
+  local result = child.lua([[
+    local connection = ACP.new({ adapter = test_adapter, session_id = "new-agent" })
+    connection._agent_info = agent_info
+    connection._handoff = "Previous conversation"
+    local prompt = connection:session_prompt({ { type = "text", text = "Continue" } }):with_options({ silent = true })
+    prompt:handle_done("refusal")
+    return connection._handoff
+  ]])
+  h.eq("Previous conversation", result)
+end
+
 T["Prompt Builder"]["PromptBuilder"] = function()
   local result = child.lua([[
     local connection = ACP.new({ adapter = test_adapter })

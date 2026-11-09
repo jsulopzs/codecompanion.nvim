@@ -386,17 +386,20 @@ function UI:format_header(role)
 end
 
 ---Format the header in the chat buffer
----@param tbl table containing the buffer contents
----@param role string The role of the user to display in the header
+---@param opts { lines: table, role: string|function, session?: table }
 ---@return nil
-function UI:set_header(tbl, role)
+function UI:set_header(opts)
+  local role = opts.role
   -- If the role is the LLM then we need to swap this out for a user func
   if type(role) == "function" then
     role = set_llm_role({ role = role, adapter = self.adapter })
   end
 
-  table.insert(tbl, self:format_header(role))
-  table.insert(tbl, "")
+  if opts.session then
+    role = (opts.session.header or role) .. " · " .. opts.session.model .. " · effort " .. opts.session.effort
+  end
+  table.insert(opts.lines, self:format_header(role))
+  table.insert(opts.lines, "")
 end
 
 ---Render the settings and any messages in the chat buffer
@@ -432,10 +435,14 @@ function UI:render(context, messages, opts)
           if last_set_role ~= nil then
             spacer()
           end
-          self:set_header(lines, self.roles.user)
+          self:set_header({ lines = lines, role = self.roles.user })
         end
         if msg.role == config.constants.LLM_ROLE and last_set_role ~= config.constants.LLM_ROLE then
-          self:set_header(lines, set_llm_role({ role = self.roles.llm, adapter = self.adapter }))
+          self:set_header({
+            lines = lines,
+            role = set_llm_role({ role = self.roles.llm, adapter = self.adapter }),
+            session = msg._meta and msg._meta.session,
+          })
         end
 
         if msg._meta and msg._meta.tag == tags.TOOL_OUTPUT then
@@ -479,7 +486,7 @@ function UI:render(context, messages, opts)
   -- for scenarios where there is no user prompt
   if opts.force_header or (vim.tbl_isempty(messages) or not helpers.has_user_messages(messages)) then
     log:trace("Setting the header for the chat buffer")
-    self:set_header(lines, self.roles.user)
+    self:set_header({ lines = lines, role = self.roles.user })
     spacer()
   else
     log:trace("Setting the messages in the chat buffer")
@@ -523,7 +530,11 @@ function UI:render_headers()
   local llm_role = set_llm_role({ role = self.roles.llm, adapter = self.adapter })
 
   for line, content in ipairs(lines) do
-    if content:match("^## " .. vim.pesc(self.roles.user)) or content:match("^## " .. vim.pesc(llm_role)) then
+    if
+      content:match("^## " .. vim.pesc(self.roles.user))
+      or content:match("^## " .. vim.pesc(llm_role))
+      or content:match("^## CodeCompanion %(")
+    then
       decorate_header(self, { row = line - 1, content = content })
     end
   end

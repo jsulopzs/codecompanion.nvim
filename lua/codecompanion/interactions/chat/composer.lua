@@ -147,8 +147,7 @@ function Composer:update_height()
     return
   end
   local settings = config.interactions.chat.composer
-  -- One more row for the key hints drawn under the text
-  local rows = api.nvim_buf_line_count(self.bufnr) + 1
+  local rows = api.nvim_buf_line_count(self.bufnr) + 3
   local height = math.min(settings.max_height, math.max(settings.min_height, rows))
   if api.nvim_win_get_height(self.winnr) ~= height then
     api.nvim_win_set_height(self.winnr, height)
@@ -166,6 +165,9 @@ function Composer:update_status()
   local state = busy and "working" or "ready"
   if self.chat.compacting then
     state = "compacting…"
+  end
+  if self.chat._changing_adapter then
+    state = "connecting"
   end
   if self.chat.pending_answer then
     state = "waiting for your answer · " .. table.concat(self.chat.pending_answer.keys, " ")
@@ -221,13 +223,22 @@ function Composer:update_status()
     "Comment",
   })
   api.nvim_buf_clear_namespace(self.bufnr, ns, 0, -1)
+  local session_ui = require("codecompanion.interactions.chat.model_info")
+  local session = session_ui.snapshot(self.chat)
   api.nvim_buf_set_extmark(self.bufnr, ns, api.nvim_buf_line_count(self.bufnr) - 1, 0, {
-    virt_lines = { segments },
+    virt_lines = {
+      segments,
+      { { session_ui.format(session), "Comment" } },
+      { { "mode " .. session.mode .. " · " .. session.connection, "Comment" } },
+    },
   })
 end
 
 ---@param kind "now"|"queue"|"parked"
 function Composer:send(kind)
+  if self.chat._changing_adapter then
+    return utils.notify("Connecting the new agent; your draft is preserved", vim.log.levels.INFO)
+  end
   local lines = api.nvim_buf_get_lines(self.bufnr, 0, -1, false)
   local text = vim.trim(table.concat(lines, "\n"))
   if text == "" then

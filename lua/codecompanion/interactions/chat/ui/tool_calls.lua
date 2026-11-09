@@ -236,7 +236,7 @@ end
 
 ---@param call table
 ---@return { lines: string[], title: string }
-local function format_acp_call(call)
+function ToolCalls.format_acp_call(call)
   local lines
   if type(call.rawInput) == "table" and not vim.tbl_isempty(call.rawInput) then
     lines = format_arguments(call.rawInput)
@@ -270,7 +270,7 @@ function ToolCalls.open(chat, opts)
   local details
   local acp_call = chat.tool_calls.acp[call_id]
   if acp_call then
-    details = format_acp_call(acp_call)
+    details = ToolCalls.format_acp_call(acp_call)
   else
     local http_tool_call = chat.tool_calls.http[call_id]
     if not http_tool_call then

@@ -125,6 +125,10 @@ function PromptBuilder:send()
   end
 
   self.connection:start_turn(self.connection.session_id, self.messages)
+  local prompt = vim.deepcopy(self.messages)
+  if self.connection._handoff then
+    table.insert(prompt, 1, { type = "text", text = self.connection._handoff })
+  end
 
   -- Send the prompt
   local jsonrpc = require("codecompanion.utils.jsonrpc")
@@ -132,7 +136,7 @@ function PromptBuilder:send()
   self._request_id = id
   local req = jsonrpc.request(id, self.connection.METHODS.SESSION_PROMPT, {
     sessionId = self.connection.session_id,
-    prompt = self.messages,
+    prompt = prompt,
   })
   self.connection:write_message(self.connection.methods.encode(req) .. "\n")
 
@@ -321,6 +325,9 @@ function PromptBuilder:handle_done(stop_reason)
     log:warn("[acp::prompt_builder] Turn ended with stop_reason=%s", stop_reason or "unknown")
   end
 
+  if status == "success" then
+    self.connection._handoff = nil
+  end
   if self.handlers.complete then
     self.handlers.complete(stop_reason)
   end

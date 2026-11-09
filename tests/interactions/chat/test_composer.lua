@@ -63,7 +63,7 @@ T["Composer"]["keeps its height when other windows open and close"] = function()
     vim.wait(100, function() return api.nvim_win_get_height(composer.winnr) == initial end)
     return { initial, opened, vertical, api.nvim_win_get_height(composer.winnr) }
   ]])
-  h.eq({ 3, 3, 3, 3 }, result)
+  h.eq({ 4, 4, 4, 4 }, result)
 end
 
 T["Composer"]["is editable while the history is locked"] = function()
@@ -76,6 +76,38 @@ T["Composer"]["is editable while the history is locked"] = function()
   h.is_true(result.writable)
   h.is_true(result.history_locked)
   h.eq("Next prompt", result.draft)
+end
+
+T["Composer"]["shows live agent settings and preserves the identity of earlier replies"] = function()
+  local result = child.lua([[
+    local chat = h.setup_chat_buffer({}, { name = "test_acp", config = { name = "test_acp", type = "acp", formatted_name = "Test ACP", handlers = { form_messages = function(_, messages) return messages end } } })
+    local function session_line()
+      local marks = vim.api.nvim_buf_get_extmarks(chat.composer.bufnr, -1, 0, -1, { details = true })
+      return marks[#marks][4].virt_lines[2][1][1]
+    end
+    local unknown = session_line()
+    local connection = require("codecompanion.acp").new({ adapter = chat.adapter, chat = chat, session_id = "settings" })
+    chat.acp_connection = connection
+    connection:handle_config_option_update("settings", {
+      { id = "model", category = "model", type = "select", currentValue = "model-one", options = {} },
+      { id = "effort", category = "thought_level", type = "select", currentValue = "high", options = {} },
+      { id = "mode", category = "mode", type = "select", currentValue = "plan", options = {} },
+    })
+    local first = session_line()
+    chat:add_message({ role = "llm", content = "Original reply" })
+    local reply = chat.messages[#chat.messages]
+    connection:handle_config_option_update("settings", {
+      { id = "model", category = "model", type = "select", currentValue = "model-two", options = {} },
+      { id = "effort", category = "thought_level", type = "select", currentValue = "low", options = {} },
+    })
+    local lines = {}
+    chat.ui:set_header({ lines = lines, role = "Assistant", session = reply._meta.session })
+    return { unknown, first, session_line(), lines[1] }
+  ]])
+  h.expect_contains("unknown", result[1])
+  h.expect_contains("model-one · effort high", result[2])
+  h.expect_contains("model-two · effort low", result[3])
+  h.expect_contains("model-one · effort high", result[4])
 end
 
 T["Composer"]["shows the keys under the text, whatever the statusline"] = function()
