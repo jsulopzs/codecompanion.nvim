@@ -55,6 +55,8 @@ Core: `lua/codecompanion/`
 
 ### Testing
 
+- The Makefile pins nvim-treesitter to the revision compatible with Neovim 0.12.5; newer main revisions require `vim.list.unique`, which that runtime does not provide. Keep test dependencies isolated under each worktree's `deps/` directory.
+
 - `make test_file FILE=` takes a single file (`tests/interactions/code_review/test_ui.lua`), never a directory. Run one file per invocation
 - When running `make test_file` tests, do not append `| tail -12` or similar to filter the output. This prevents the user's rules governing what can be auto-accepted, from applying
 - Chat buffer cursor position, scrolling and folds are verified by hand in real use. Don't add test cases for them, even alongside a fix. Ask first

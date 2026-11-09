@@ -1,5 +1,7 @@
 all: format docs test
 
+TREESITTER_REVISION := 4d9916e477e5d4e3b245845dfd285edf429f3252
+
 docs: deps/panvimdoc
 	@echo Generating Docs...
 	@pandoc \
@@ -34,7 +36,7 @@ test_file: deps
 	LC_ALL=C nvim --headless --noplugin -u ./scripts/minimal_init.lua -c "lua MiniTest.run_file('$(FILE)')"
 
 deps: deps/plenary.nvim deps/nvim-treesitter deps/mini.nvim deps/panvimdoc
-	@echo Pulling...
+	@git -C deps/nvim-treesitter checkout --quiet $(TREESITTER_REVISION)
 
 deps/plenary.nvim:
 	@mkdir -p deps
