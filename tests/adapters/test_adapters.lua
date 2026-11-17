@@ -1200,6 +1200,17 @@ end
 
 T["Adapter"]["model_choice"] = new_set()
 
+T["Adapter"]["model_choice"]["ACP adapters resolve their model without an HTTP schema error"] = function()
+  local result = child.lua([[
+    local adapters = require("codecompanion.adapters")
+    local adapter = adapters.resolve("claude_code")
+    local ok, model = pcall(utils.model_choice, adapter)
+    return { ok = ok, model = model or false }
+  ]])
+
+  h.eq({ ok = true, model = false }, result)
+end
+
 T["Adapter"]["model_choice"]["returns nil when choices is a function"] = function()
   local result = child.lua([[
     local adapter = {

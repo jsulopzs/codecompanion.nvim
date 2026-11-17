@@ -458,7 +458,7 @@ end
 ---@param opts? { async?: boolean } Pass `async = false` to block until the model list has been fetched
 ---@return table?
 function M.model_choice(adapter, opts)
-  local choices = adapter.schema.model.choices
+  local choices = adapter.schema and adapter.schema.model and adapter.schema.model.choices
   if type(choices) == "function" then
     choices = choices(adapter, opts)
   end
