@@ -17,8 +17,13 @@ vim.o.background = "dark"
 vim.cmd("colorscheme default")
 
 -- Install and setup Tree-sitter
+if vim.fn.executable("tree-sitter") ~= 1 then
+  vim.api.nvim_err_writeln("Test preparation requires the tree-sitter CLI (brew install tree-sitter-cli)")
+  vim.cmd("cquit")
+end
+
 require("nvim-treesitter").setup({
-  install_dir = "deps/parsers",
+  install_dir = vim.fs.joinpath(root, "deps/parsers"),
 })
 
 local ok, err_or_ok = require("nvim-treesitter")
@@ -32,7 +37,17 @@ local ok, err_or_ok = require("nvim-treesitter")
   :wait(1800000)
 
 if not ok then
-  print("ERROR: ", err_or_ok)
+  require("nvim-treesitter.log").show()
+  vim.api.nvim_err_writeln("Test parser installation failed: " .. tostring(err_or_ok))
+  vim.cmd("cquit")
+end
+
+for _, language in ipairs({ "lua", "make", "markdown", "markdown_inline", "yaml" }) do
+  local loaded, error = pcall(vim.treesitter.language.add, language)
+  if not loaded then
+    vim.api.nvim_err_writeln("Test parser is unavailable for " .. language .. ": " .. tostring(error))
+    vim.cmd("cquit")
+  end
 end
 
 vim.treesitter.language.register("markdown", "codecompanion")

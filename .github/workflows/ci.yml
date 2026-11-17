@@ -2,6 +2,9 @@ name: Continuous Integration
 
 on:
   pull_request: ~
+  push:
+    branches: [datons]
+  workflow_dispatch: ~
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.head_ref || github.sha }}
@@ -14,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        nvim_tag: [nightly, v0.12.0]
+        nvim_tag: [nightly, v0.12.6]
     name: ${{ matrix.os }} / ${{ matrix.nvim_tag }}
     runs-on: ${{ matrix.os }}
     env:
@@ -44,8 +47,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        nvim_tag: [nightly, v0.12.0]
-    name: windows-latest / ${{ matrix.nvim_tag }} / curl
+        nvim_tag: [nightly, v0.12.6]
+    name: windows-latest / ${{ matrix.nvim_tag }} / platform contracts
     runs-on: windows-latest
     defaults:
       run:
@@ -55,12 +58,18 @@ jobs:
       - name: Checkout 📋
         uses: actions/checkout@v6
 
+      - name: Install Tree-sitter 🌳
+        uses: tree-sitter/setup-action/cli@v2
+
       - name: Prepare Neovim 🚧
         env:
           NVIM_TAG: ${{ matrix.nvim_tag }}
         run: |
           bash ./scripts/ci-install.sh
-          git clone --filter=blob:none https://github.com/echasnovski/mini.nvim deps/mini.nvim
+          if ! command -v make >/dev/null 2>&1; then
+            choco install make -y --no-progress
+          fi
+          make deps
 
       # Git Bash puts its own curl first on PATH, but users get the one Windows ships
       - name: Run curl tests 🧪
@@ -70,4 +79,11 @@ jobs:
           ./nvim-win64/bin/nvim.exe --version
           ./nvim-win64/bin/nvim.exe --headless --noplugin -u NONE --cmd "set rtp+=.,deps/mini.nvim" \
             -c "lua require('mini.test').setup(); MiniTest.run_file('tests/utils/test_curl.lua', { collect = { filter_cases = function(case) return case.desc[2] == 'Curl against a local server' end } })"
+
+      - name: Run Windows path and process tests
+        run: |
+          ./nvim-win64/bin/nvim.exe --headless --noplugin -u scripts/minimal_init.lua \
+            -c "lua local cases = MiniTest.collect({ find_files = function() return { 'tests/utils/test_files.lua' } end, filter_cases = function(case) return case.desc[#case.desc] == 'handles Windows root directory' end }); assert(#cases == 1, 'Expected one Windows path test'); MiniTest.execute(cases)"
+          ./nvim-win64/bin/nvim.exe --headless --noplugin -u scripts/minimal_init.lua \
+            -c "lua local cases = MiniTest.collect({ find_files = function() return { 'tests/interactions/chat/tools/builtin/test_run_command.lua' } end, filter_cases = function(case) return vim.tbl_contains(case.desc, 'Windows') end }); assert(#cases == 1, 'Expected one Windows process test'); MiniTest.execute(cases)"
 

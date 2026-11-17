@@ -57,6 +57,8 @@ Core: `lua/codecompanion/`
 
 - The Makefile pins nvim-treesitter to the revision compatible with Neovim 0.12.5; newer main revisions require `vim.list.unique`, which that runtime does not provide. Keep test dependencies isolated under each worktree's `deps/` directory.
 - Set `NVIM=/absolute/path/to/nvim` when running Make targets if PATH contains multiple Neovim installations; the test bootstrap rejects versions below 0.12 and uses absolute dependency paths so changing directory cannot unload dependencies.
+- Test preparation requires the `tree-sitter` CLI (`brew install tree-sitter-cli` on macOS; the `tree-sitter` Homebrew formula only installs the library). The bootstrap must stop if installation fails or any required parser cannot load; continuing without parsers previously produced 40 misleading failures.
+- Run the full suite with Neovim nightly (0.13) to execute the reference screenshots. The stable runtime remains a compatibility check. macOS skips two Windows-only contracts; the Windows CI jobs execute those cases explicitly and require each selector to collect exactly one case.
 
 - `make test_file FILE=` takes a single file (`tests/interactions/code_review/test_ui.lua`), never a directory. Run one file per invocation
 - When running `make test_file` tests, do not append `| tail -12` or similar to filter the output. This prevents the user's rules governing what can be auto-accepted, from applying
