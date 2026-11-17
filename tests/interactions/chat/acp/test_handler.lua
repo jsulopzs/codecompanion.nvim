@@ -1409,4 +1409,67 @@ T["ACPHandler"]["Config Options"]["reflects config option changes in metadata"] 
   h.eq("Plan Mode", result.name_after)
 end
 
+for _, during_load in ipairs({ false, true }) do
+  T["pending requests " .. (during_load and "during session load" or "without a local prompt")] = function()
+    local result = child.lua(
+      [[
+      local chat, connection = autonomous_chat()
+      local shown, replies = {}, {}
+      package.loaded['codecompanion.interactions.chat.acp.elicitation'] = {
+        ask = function(_, request)
+          table.insert(shown, request.message)
+          _G.pending_question = request
+        end,
+      }
+      package.loaded['codecompanion.interactions.chat.acp.request_permission'] = {
+        confirm = function(_, request)
+          table.insert(shown, request.tool_call.title)
+          request.respond('allow')
+        end,
+      }
+      connection.write_message = function(_, message) table.insert(replies, vim.json.decode(message)) end
+      local function replay()
+        connection:handle_incoming_request_or_notification({
+          id = 501, method = 'elicitation/create', params = {
+            sessionId = 'autonomous-session', mode = 'form', message = 'Question after reconnect',
+            requestedSchema = { type = 'object', properties = {} },
+          },
+        })
+        connection:handle_incoming_request_or_notification({
+          id = 502, method = 'session/request_permission', params = {
+            sessionId = 'autonomous-session', toolCall = { toolCallId = 'pending', title = 'Permission after reconnect' },
+            options = { { optionId = 'allow', name = 'Allow', kind = 'allow_once' } },
+          },
+        })
+      end
+      if ... then
+        connection.is_ready = function() return true end
+        connection._establish_session = function()
+          replay()
+          assert(#shown == 0, 'Requests must wait for restored history')
+          return true
+        end
+        assert(connection:load_session('autonomous-session'))
+        vim.wait(1000, function() return #shown == 1 end)
+      else
+        replay()
+      end
+      local before_answer = vim.deepcopy(shown)
+      if _G.pending_question then
+        _G.pending_question.respond({ action = 'accept', content = { answer = 'yes' } })
+        _G.pending_question = nil
+      end
+      return { before_answer = before_answer, shown = shown, replies = replies }
+    ]],
+      { during_load }
+    )
+    h.eq({ "Question after reconnect" }, result.before_answer)
+    h.eq({ "Question after reconnect", "Permission after reconnect" }, result.shown)
+    h.eq(501, result.replies[1].id)
+    h.eq("accept", result.replies[1].result.action)
+    h.eq(502, result.replies[2].id)
+    h.eq("allow", result.replies[2].result.outcome.optionId)
+  end
+end
+
 return T

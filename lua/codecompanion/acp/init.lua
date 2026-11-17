@@ -577,6 +577,10 @@ function Connection:load_session(session_id, opts)
         session_id = self.session_id,
       })
 
+      vim.schedule(function()
+        self:flush_user_requests()
+      end)
+
       return true
     end,
   })
@@ -1112,6 +1116,47 @@ function Connection:_handle_autonomous_update(opts)
   end
 end
 
+---Present questions and permissions even when no local prompt owns the turn
+---@param message table
+function Connection:handle_user_request(message)
+  if self._loading_session then
+    self._pending_user_requests = self._pending_user_requests or {}
+    table.insert(self._pending_user_requests, message)
+    return
+  end
+
+  local receiver = self._active_prompt or (self._autonomous_turn and self._autonomous_turn.receiver)
+  if not receiver then
+    local chat = self:get_chat(message.params.sessionId)
+    if not chat then
+      return
+    end
+    if not self._user_request_receiver or self._user_request_session ~= message.params.sessionId then
+      self._user_request_session = message.params.sessionId
+      self._user_request_receiver =
+        require("codecompanion.interactions.chat.acp.handler").new(chat):bind_updates(PromptBuilder.for_updates(self))
+    end
+    receiver = self._user_request_receiver
+  end
+
+  if message.method == METHODS.SESSION_REQUEST_PERMISSION then
+    receiver:handle_permission_request(message.id, message.params)
+  else
+    receiver:handle_elicitation_request(message.id, message.params)
+  end
+end
+
+---Present requests replayed during loading after the history has been restored
+function Connection:flush_user_requests()
+  local pending = self._pending_user_requests or {}
+  self._pending_user_requests = nil
+  for _, message in ipairs(pending) do
+    if message.params.sessionId == self.session_id then
+      self:handle_user_request(message)
+    end
+  end
+end
+
 ---@private
 local DISPATCH = {
   [METHODS.SESSION_UPDATE] = function(self, m)
@@ -1161,17 +1206,13 @@ local DISPATCH = {
     end
   end,
   [METHODS.SESSION_REQUEST_PERMISSION] = function(self, m)
-    if self._active_prompt then
-      self._active_prompt:handle_permission_request(m.id, m.params)
-    end
+    self:handle_user_request(m)
   end,
   [METHODS.ELICITATION_CREATE] = function(self, m)
     if m.params and m.params.mode == "url" then
       return self:handle_url_elicitation(m.id, m.params)
     end
-    if self._active_prompt then
-      self._active_prompt:handle_elicitation_request(m.id, m.params)
-    end
+    self:handle_user_request(m)
   end,
   [METHODS.FS_READ_TEXT_FILE] = function(self, m)
     self:handle_fs_read_text_file_request(m.id, m.params)
